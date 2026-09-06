@@ -15,6 +15,7 @@ The environment is managed with [uv](https://docs.astral.sh/uv/); the venv lives
 uv venv --python 3.12
 uv pip install -r requirements.txt
 cp .env.example .env   # then fill in DJANGO_SECRET_KEY
+python manage.py migrate   # db.sqlite3 is not in the repo; this creates it
 
 # Run the dev server
 python manage.py runserver
@@ -30,7 +31,7 @@ python manage.py createsuperuser
 python manage.py test
 ```
 
-Database is SQLite (`db.sqlite3`, committed to the repo). Uploaded product images are written under `media/` (served via `MEDIA_URL`/`MEDIA_ROOT` in `toystorewebsite/settings.py`), and static assets referenced in templates live under `static/`.
+Database is SQLite (`db.sqlite3`), gitignored and not shipped with a clone — run `migrate` to create it. Uploaded product images are written under `media/` (served via `MEDIA_URL`/`MEDIA_ROOT` in `toystorewebsite/settings.py`); `media/` is gitignored, so new uploads stay out of this public repo while the demo images already tracked there remain. Static assets referenced in templates live under `static/`.
 
 ## Architecture
 
@@ -47,6 +48,6 @@ Database is SQLite (`db.sqlite3`, committed to the repo). Uploaded product image
 
 ## Notes for changes
 
-- `SECRET_KEY` is read from `DJANGO_SECRET_KEY` (loaded from a gitignored `.env`), falling back to a throwaway key generated at startup so fresh clones and CI still run — that fallback means sessions reset on every restart if `.env` is missing. `DEBUG = True` is still hardcoded in `toystorewebsite/settings.py`; it's dev-only configuration, not something to "fix" incidentally while working on unrelated tasks.
+- `SECRET_KEY` is read from `DJANGO_SECRET_KEY` (loaded from a gitignored `.env`). If it's unset, startup raises `ImproperlyConfigured` when `DEBUG` is off, and under `DEBUG` falls back to a throwaway key generated per process with a `RuntimeWarning` — so fresh clones and CI still run, but sessions reset on every restart until `.env` is filled in. `DEBUG = True` is still hardcoded in `toystorewebsite/settings.py`; it's dev-only configuration, not something to "fix" incidentally while working on unrelated tasks.
 - This repo is **public**, and `db.sqlite3` remains in git history (with four demo accounts' emails and pbkdf2 password hashes) even though it's no longer tracked. The original `SECRET_KEY` is likewise still in history and has been rotated, so the leaked one is worthless. Don't commit real credentials or user data here.
 - Adding a new product category means updating both the string used when filtering in a new/existing view and wherever the category is presented for selection (there's no shared choices list — `AddProductForm`'s commented-out `CATEGORIES_CHOICES` was never wired in, so `pcategory` is currently just a free-text `CharField`).

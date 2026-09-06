@@ -12,7 +12,9 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 
 from pathlib import Path
 import os
+import warnings
 
+from django.core.exceptions import ImproperlyConfigured
 from django.core.management.utils import get_random_secret_key
 from dotenv import load_dotenv
 
@@ -25,14 +27,32 @@ load_dotenv(BASE_DIR / ".env")
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-# Read from DJANGO_SECRET_KEY (see .env.example). Falls back to a throwaway key
-# generated at startup so a fresh clone and CI still run; set a real value in
-# .env before deploying, or sessions reset on every restart.
-SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY') or get_random_secret_key()
-
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
+
+# SECURITY WARNING: keep the secret key used in production secret!
+# Read from DJANGO_SECRET_KEY (see .env.example). When it is missing we only
+# fall back to a throwaway key under DEBUG, so a fresh clone and CI still run.
+# The fallback is generated per process: under a multi-process server each
+# worker would sign with a different key, so sessions and password-reset links
+# issued by one worker are rejected by the next. That is a hard error when
+# DEBUG is off, and a loud warning when it is on.
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
+
+if not SECRET_KEY:
+    if not DEBUG:
+        raise ImproperlyConfigured(
+            "DJANGO_SECRET_KEY is not set. Copy .env.example to .env and fill "
+            "in a real value (or set the variable in the environment) before "
+            "running with DEBUG off."
+        )
+    SECRET_KEY = get_random_secret_key()
+    warnings.warn(
+        "DJANGO_SECRET_KEY is not set; using a throwaway key generated at "
+        "startup. Sessions will not survive a restart. Fill in .env to fix.",
+        RuntimeWarning,
+        stacklevel=2,
+    )
 
 ALLOWED_HOSTS = []
 
