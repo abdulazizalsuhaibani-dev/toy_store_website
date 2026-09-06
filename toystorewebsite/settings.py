@@ -13,15 +13,23 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 from pathlib import Path
 import os
 
+from django.core.management.utils import get_random_secret_key
+from dotenv import load_dotenv
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 TEMPLATE_DIR = os.path.join(BASE_DIR, "apps" + os.sep + "templates")
+
+load_dotenv(BASE_DIR / ".env")
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-@-cmkdnfa*i5$@fd8qz36%7ih#v3$=oze%cz)x=&91zl^ey*(p'
+# Read from DJANGO_SECRET_KEY (see .env.example). Falls back to a throwaway key
+# generated at startup so a fresh clone and CI still run; set a real value in
+# .env before deploying, or sessions reset on every restart.
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY') or get_random_secret_key()
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True

@@ -1,3 +1,9 @@
 __pycache__/
 db.sqlite3
 .vscode/
+.venv/
+
+# Secrets — never commit these. .env.example is the tracked template.
+.env
+.env.*
+!.env.example
