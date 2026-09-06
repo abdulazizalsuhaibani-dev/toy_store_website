@@ -8,9 +8,14 @@ A Django 5.0 toy store website. Single Django app (`apps/toymodule`) providing a
 
 ## Commands
 
-There is no `requirements.txt` in the repo (the CI workflow at `.github/workflows/django.yml` expects one at the root but it's missing — create it with `pip freeze > requirements.txt` from a working environment before relying on CI or a fresh install). Known direct dependencies from `settings.py`/imports: `django`, `django-crispy-forms`, `crispy-bootstrap5`.
+The environment is managed with [uv](https://docs.astral.sh/uv/); the venv lives at `.venv/`. `Pillow` is a hard requirement (Django refuses to start without it because `Product.pimage` is an `ImageField`).
 
 ```bash
+# First-time setup
+uv venv --python 3.12
+uv pip install -r requirements.txt
+cp .env.example .env   # then fill in DJANGO_SECRET_KEY
+
 # Run the dev server
 python manage.py runserver
 
@@ -42,5 +47,6 @@ Database is SQLite (`db.sqlite3`, committed to the repo). Uploaded product image
 
 ## Notes for changes
 
-- `DEBUG = True` and a hardcoded `SECRET_KEY` are committed in `toystorewebsite/settings.py` — this is a dev-only configuration, not something to "fix" incidentally while working on unrelated tasks.
+- `SECRET_KEY` is read from `DJANGO_SECRET_KEY` (loaded from a gitignored `.env`), falling back to a throwaway key generated at startup so fresh clones and CI still run — that fallback means sessions reset on every restart if `.env` is missing. `DEBUG = True` is still hardcoded in `toystorewebsite/settings.py`; it's dev-only configuration, not something to "fix" incidentally while working on unrelated tasks.
+- This repo is **public**, and `db.sqlite3` remains in git history (with four demo accounts' emails and pbkdf2 password hashes) even though it's no longer tracked. The original `SECRET_KEY` is likewise still in history and has been rotated, so the leaked one is worthless. Don't commit real credentials or user data here.
 - Adding a new product category means updating both the string used when filtering in a new/existing view and wherever the category is presented for selection (there's no shared choices list — `AddProductForm`'s commented-out `CATEGORIES_CHOICES` was never wired in, so `pcategory` is currently just a free-text `CharField`).
