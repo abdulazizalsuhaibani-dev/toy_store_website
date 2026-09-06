@@ -3,6 +3,10 @@ db.sqlite3
 .vscode/
 .venv/
 
+# User-uploaded product images (MEDIA_ROOT). The demo images already tracked
+# here stay tracked — gitignore does not apply to files already in the index.
+media/
+
 # Secrets — never commit these. .env.example is the tracked template.
 .env
 .env.*
