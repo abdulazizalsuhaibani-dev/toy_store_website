@@ -1,0 +1,58 @@
+# Render Blueprint. Defines the service in the repo instead of in dashboard
+# clicks, so a rebuild from scratch is reproducible.
+#
+# Create it with: Render dashboard -> New -> Blueprint -> pick this repo.
+# The variables marked `sync: false` are deliberately not stored here; Render
+# prompts for them when the blueprint is first applied. See DEPLOYMENT.md.
+
+services:
+  - type: web
+    name: toy-store-website
+    runtime: python
+    plan: free
+    # Pick whichever Render region is closest to the Supabase project's region:
+    # every request makes several round trips to Postgres, so a mismatch here
+    # is the single biggest avoidable latency cost in this setup.
+    region: frankfurt
+
+    buildCommand: "./build.sh"
+    # Render routes to $PORT. Two workers fit the free instance's 512 MB and
+    # keep one request from blocking the next; access logs go to stdout so they
+    # show up in the Render log stream.
+    startCommand: >-
+      gunicorn toystorewebsite.wsgi:application
+      --bind 0.0.0.0:$PORT
+      --workers 2
+      --timeout 60
+      --access-logfile -
+
+    # Hits a view that verifies the database connection, so an instance that
+    # boots but cannot reach Supabase is reported unhealthy rather than
+    # serving 500s. Exempt from the HTTPS redirect in settings.py.
+    healthCheckPath: /healthz
+
+    envVars:
+      # Generated once by Render and kept across deploys, so sessions survive a
+      # restart. Never appears in the repo.
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+
+      - key: DJANGO_DEBUG
+        value: "False"
+
+      # Supabase session-pooler connection string. Prompted for on first apply.
+      - key: DATABASE_URL
+        sync: false
+
+      # Supabase Storage, S3-compatible API. SUPABASE_S3_ENDPOINT being set is
+      # what switches uploads over to the bucket.
+      - key: SUPABASE_S3_ENDPOINT
+        sync: false
+      - key: SUPABASE_S3_REGION
+        sync: false
+      - key: SUPABASE_S3_BUCKET
+        sync: false
+      - key: SUPABASE_S3_ACCESS_KEY_ID
+        sync: false
+      - key: SUPABASE_S3_SECRET_ACCESS_KEY
+        sync: false

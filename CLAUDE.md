@@ -29,6 +29,14 @@ python manage.py createsuperuser
 
 # Run tests (CI invokes this; no tests currently exist in the repo)
 python manage.py test
+
+# Production checks. CI runs both; they exercise the DEBUG=False branch of
+# settings.py, which is otherwise never hit locally.
+DJANGO_DEBUG=False DJANGO_ALLOWED_HOSTS=example.com python manage.py check --deploy --fail-level WARNING
+python manage.py collectstatic --no-input
+
+# Push local media/ into the configured remote storage (one-time, at deploy).
+python manage.py upload_media --dry-run
 ```
 
 Database is SQLite (`db.sqlite3`), gitignored and not shipped with a clone — run `migrate` to create it. Uploaded product images are written under `media/` (served via `MEDIA_URL`/`MEDIA_ROOT` in `toystorewebsite/settings.py`); `media/` is gitignored, so new uploads stay out of this public repo while the demo images already tracked there remain. Static assets referenced in templates live under `static/`.
@@ -45,9 +53,12 @@ Database is SQLite (`db.sqlite3`), gitignored and not shipped with a clone — r
 - **`apps/templates/`** — the single template root (`TEMPLATE_DIR` in `settings.py`, `APP_DIRS` also on). `layouts/base.html` is the shared layout; `includes/` holds `header.html`/`footer.html`/`sidebar.html` partials; `toymodule/` holds the page templates. When adding a page, extend `layouts/base.html` and add a template under `apps/templates/toymodule/`.
 - Styling uses Bootstrap 5 via `django-crispy-forms` + `crispy-bootstrap5` (`CRISPY_TEMPLATE_PACK = "bootstrap5"` in settings) — render forms in templates with `{{ form|crispy }}` rather than hand-rolled `<form>` markup.
 - `apps` is a Django namespace package (no `apps/__init__.py`) — this is intentional for Django 5, not an oversight.
+- **Deployment** — `render.yaml` (Render Blueprint), `build.sh` (install → `collectstatic` → `migrate` → optional first superuser), `.python-version`, and `DEPLOYMENT.md` (the runbook, including the Supabase gotchas). Target is a free Render web service with Postgres and uploaded images on Supabase; `apps/toymodule/management/commands/upload_media.py` does the one-time push of `media/` into the bucket. Free Render instances have no persistent disk, which is why neither the database nor uploads may live on them.
 
 ## Notes for changes
 
-- `SECRET_KEY` is read from `DJANGO_SECRET_KEY` (loaded from a gitignored `.env`). If it's unset, startup raises `ImproperlyConfigured` when `DEBUG` is off, and under `DEBUG` falls back to a throwaway key generated per process with a `RuntimeWarning` — so fresh clones and CI still run, but sessions reset on every restart until `.env` is filled in. `DEBUG = True` is still hardcoded in `toystorewebsite/settings.py`; it's dev-only configuration, not something to "fix" incidentally while working on unrelated tasks.
+- `SECRET_KEY` is read from `DJANGO_SECRET_KEY` (loaded from a gitignored `.env`). If it's unset, startup raises `ImproperlyConfigured` when `DEBUG` is off, and under `DEBUG` falls back to a throwaway key generated per process with a `RuntimeWarning` — so a fresh clone still runs, but sessions reset on every restart until `.env` is filled in. CI supplies the key explicitly.
+- `DEBUG` comes from `DJANGO_DEBUG` and **defaults to `False`**, so a deployed host that is missing the variable fails safe. Local development sets `DJANGO_DEBUG=True` in `.env` — a clone without one will start in production mode and refuse to run without a secret key. Everything under `if not DEBUG:` in `settings.py` (HTTPS redirect, secure cookies, HSTS) is off locally by design.
+- Deployment settings are all env-driven with local fallbacks, so `runserver` and `manage.py test` need no configuration: no `DATABASE_URL` means SQLite, no `SUPABASE_S3_ENDPOINT` means local file storage. This is deliberate — one settings module, no `settings/prod.py` split, and CI exercises the same file production does.
 - This repo is **public**, and `db.sqlite3` remains in git history (with four demo accounts' emails and pbkdf2 password hashes) even though it's no longer tracked. The original `SECRET_KEY` is likewise still in history and has been rotated, so the leaked one is worthless. Don't commit real credentials or user data here.
 - Adding a new product category means updating both the string used when filtering in a new/existing view and wherever the category is presented for selection (there's no shared choices list — `AddProductForm`'s commented-out `CATEGORIES_CHOICES` was never wired in, so `pcategory` is currently just a free-text `CharField`).

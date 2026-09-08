@@ -3,3 +3,16 @@ django-crispy-forms==2.5
 crispy-bootstrap5==2026.3
 Pillow==12.3.0
 python-dotenv==1.2.3
+
+# Production serving. Unused by `runserver`, but installed everywhere so that
+# `manage.py check --deploy` and CI exercise the same settings module as Render.
+gunicorn==26.2.0
+whitenoise==6.12.0
+
+# Postgres on Render/Supabase. DATABASE_URL is unset locally and in CI, where
+# settings.py falls back to SQLite, so neither driver is touched there.
+dj-database-url==3.1.2
+psycopg[binary]==3.3.5
+
+# Media uploads to Supabase Storage over its S3-compatible API.
+django-storages[s3]==1.14.6

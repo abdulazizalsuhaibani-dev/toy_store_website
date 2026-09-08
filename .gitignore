@@ -11,3 +11,6 @@ media/
 .env
 .env.*
 !.env.example
+
+# collectstatic output (STATIC_ROOT). Build artifact, regenerated on deploy.
+staticfiles/

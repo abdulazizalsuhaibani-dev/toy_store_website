@@ -8,12 +8,19 @@ https://docs.djangoproject.com/en/5.0/topics/settings/
 
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.0/ref/settings/
+
+Deployment target is a Render web service backed by Supabase (Postgres for the
+database, Storage for uploaded product images). Every deployment-specific knob
+below is read from the environment and falls back to the local SQLite/
+filesystem setup when unset, so `runserver` and CI need no extra configuration.
+See .env.example for the variable list and DEPLOYMENT.md for the runbook.
 """
 
 from pathlib import Path
 import os
 import warnings
 
+import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
 from django.core.management.utils import get_random_secret_key
 from dotenv import load_dotenv
@@ -24,11 +31,32 @@ TEMPLATE_DIR = os.path.join(BASE_DIR, "apps" + os.sep + "templates")
 
 load_dotenv(BASE_DIR / ".env")
 
+
+def env_flag(name, default=False):
+    """Read a boolean from the environment.
+
+    Render's dashboard stores every value as a string, so "False" would be
+    truthy under a bare bool() and silently ship a debug build to production.
+    """
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def env_list(name):
+    """Read a comma-separated list, ignoring blanks and stray whitespace."""
+    return [item.strip() for item in os.environ.get(name, "").split(",") if item.strip()]
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# Defaults to False: a forgotten DJANGO_DEBUG on a deployed host must never be
+# what stands between an exception and a public page listing SECRET_KEY and the
+# database credentials. Local development sets DJANGO_DEBUG=True in .env.
+DEBUG = env_flag("DJANGO_DEBUG", default=False)
 
 # SECURITY WARNING: keep the secret key used in production secret!
 # Read from DJANGO_SECRET_KEY (see .env.example). When it is missing we only
@@ -54,7 +82,25 @@ if not SECRET_KEY:
         stacklevel=2,
     )
 
-ALLOWED_HOSTS = []
+# Render injects RENDER_EXTERNAL_HOSTNAME with the service's own hostname, so
+# the first deploy works before any domain is decided. Custom domains go in
+# DJANGO_ALLOWED_HOSTS as a comma-separated list.
+ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS")
+
+RENDER_EXTERNAL_HOSTNAME = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+if RENDER_EXTERNAL_HOSTNAME and RENDER_EXTERNAL_HOSTNAME not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
+
+if DEBUG and not ALLOWED_HOSTS:
+    ALLOWED_HOSTS = ["localhost", "127.0.0.1", "[::1]"]
+
+# Django requires the scheme here. Every host we deploy to is HTTPS-only; the
+# loopback names are dropped because they are never a CSRF origin in production.
+CSRF_TRUSTED_ORIGINS = [
+    f"https://*{host}" if host.startswith(".") else f"https://{host}"
+    for host in ALLOWED_HOSTS
+    if host not in {"localhost", "127.0.0.1", "[::1]", "*"}
+]
 
 
 # Application definition
@@ -77,6 +123,9 @@ CRISPY_TEMPLATE_PACK = "bootstrap5"
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # Must sit directly below SecurityMiddleware and above everything else, so
+    # static files are served without running session/auth machinery.
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -109,12 +158,33 @@ WSGI_APPLICATION = 'toystorewebsite.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+# On Render, DATABASE_URL holds the Supabase *session pooler* connection string
+# (postgres://postgres.<ref>:<pw>@aws-<region>.pooler.supabase.com:5432/postgres).
+# It must not be the direct db.<ref>.supabase.co connection, which resolves to
+# IPv6 only and is therefore unreachable from Render, nor the transaction pooler
+# on :6543, which targets serverless callers and disables prepared statements.
+# Unset locally and in CI, where this falls back to the SQLite file.
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
+if DATABASE_URL:
+    DATABASES = {
+        "default": dj_database_url.parse(
+            DATABASE_URL,
+            # Reuse connections across requests; the pooler holds them open.
+            conn_max_age=600,
+            # Supabase recycles pooler connections, so verify one before reusing
+            # it rather than failing the request that inherits a dead socket.
+            conn_health_checks=True,
+            ssl_require=True,
+        )
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation
@@ -155,15 +225,135 @@ STATIC_URL = 'static/'
 STATICFILES_DIRS = [
     BASE_DIR / "static",
 ]
+# collectstatic writes here during the Render build; WhiteNoise serves it at
+# runtime. Gitignored - it is build output, not source.
+STATIC_ROOT = BASE_DIR / "staticfiles"
+
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        # Hashed filenames plus gzip/brotli, so static assets can be cached
+        # indefinitely and a redeploy busts them by changing the name.
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
+
+# Uploaded product images. Render's free instances have no persistent disk, so
+# MEDIA_ROOT is wiped on every deploy and restart; when the Supabase Storage
+# credentials are present we swap the default storage for its S3-compatible API
+# instead. Templates render {{ p.pimage.url }} unchanged - the storage backend
+# is what decides whether that resolves to a local path or a bucket URL.
+SUPABASE_S3_ENDPOINT = os.environ.get("SUPABASE_S3_ENDPOINT")
+
+if SUPABASE_S3_ENDPOINT:
+    _missing = [
+        name
+        for name in (
+            "SUPABASE_S3_BUCKET",
+            "SUPABASE_S3_REGION",
+            "SUPABASE_S3_ACCESS_KEY_ID",
+            "SUPABASE_S3_SECRET_ACCESS_KEY",
+        )
+        if not os.environ.get(name)
+    ]
+    if _missing:
+        raise ImproperlyConfigured(
+            "SUPABASE_S3_ENDPOINT is set, so uploads are expected to go to "
+            "Supabase Storage, but these variables are missing: "
+            + ", ".join(_missing)
+        )
+
+    # Uploads go through the S3 API, but reads must not: that endpoint only
+    # answers SigV4-signed requests, so a browser hitting it for an <img src>
+    # gets a 400. Public objects are served from .../storage/v1/object/public/
+    # <bucket>/<key> instead, and custom_domain is what points URL generation
+    # there. Set SUPABASE_S3_CUSTOM_DOMAIN to override, e.g. for a CDN.
+    _public_base = os.environ.get("SUPABASE_S3_CUSTOM_DOMAIN")
+    if not _public_base:
+        _endpoint_host_path = SUPABASE_S3_ENDPOINT.split("://", 1)[-1].rstrip("/")
+        if not _endpoint_host_path.endswith("/storage/v1/s3"):
+            raise ImproperlyConfigured(
+                "SUPABASE_S3_ENDPOINT should end in /storage/v1/s3 - copy it "
+                "from Storage > S3 Connection in the Supabase dashboard - or "
+                "set SUPABASE_S3_CUSTOM_DOMAIN explicitly. Got: "
+                f"{SUPABASE_S3_ENDPOINT!r}"
+            )
+        _public_base = "{}/object/public/{}".format(
+            _endpoint_host_path[: -len("/s3")],
+            os.environ["SUPABASE_S3_BUCKET"],
+        )
+
+    STORAGES["default"] = {
+        "BACKEND": "storages.backends.s3.S3Storage",
+        "OPTIONS": {
+            "bucket_name": os.environ["SUPABASE_S3_BUCKET"],
+            # Read path. Assumes a *public* bucket; a private one would need
+            # querystring_auth back on and this removed.
+            "custom_domain": _public_base,
+            "endpoint_url": SUPABASE_S3_ENDPOINT,
+            "region_name": os.environ["SUPABASE_S3_REGION"],
+            "access_key": os.environ["SUPABASE_S3_ACCESS_KEY_ID"],
+            "secret_key": os.environ["SUPABASE_S3_SECRET_ACCESS_KEY"],
+            # Supabase implements no ACLs; sending one fails every upload.
+            "default_acl": None,
+            # Supabase serves path-style addressing only, not the virtual-host
+            # style boto3 prefers.
+            "addressing_style": "path",
+            "signature_version": "s3v4",
+            # The bucket is public, so URLs need no expiring signature and stay
+            # stable enough for browsers and CDNs to cache.
+            "querystring_auth": False,
+            # Keep an upload named like an existing object instead of
+            # overwriting it, matching Django's local-storage behaviour.
+            "file_overwrite": False,
+        },
+    }
 
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+# Security. Applied only with DEBUG off, so local development over plain HTTP is
+# not redirected to an https://localhost that nothing is serving.
+if not DEBUG:
+    # Render terminates TLS at its edge and forwards plain HTTP with
+    # X-Forwarded-Proto. Without this Django never sees a request as secure and
+    # SECURE_SSL_REDIRECT below redirects to itself forever.
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SECURE_SSL_REDIRECT = True
+
+    # Render's health check reaches the instance directly, so it carries no
+    # X-Forwarded-Proto and would be answered with a 301 rather than the 200 it
+    # needs. Matched against the path without its leading slash.
+    SECURE_REDIRECT_EXEMPT = [r"^healthz$"]
+
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
+    # One year. SECURE_HSTS_PRELOAD stays off: preloading hard-codes a domain
+    # into browsers, which is not ours to request for a *.onrender.com
+    # subdomain. Turn it on once a custom domain is in place.
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = "DENY"
+
+    # security.W021 is the HSTS-preload warning answered directly above: a
+    # decision, not an oversight. Silencing just this one lets CI run
+    # `check --deploy --fail-level WARNING`, so any *new* warning fails the
+    # build instead of scrolling past in a wall of expected output. Delete this
+    # line at the same time as enabling SECURE_HSTS_PRELOAD.
+    SILENCED_SYSTEM_CHECKS = ["security.W021"]
+
 
 # logger
 '''

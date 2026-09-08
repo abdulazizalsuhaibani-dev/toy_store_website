@@ -5,8 +5,25 @@ from .forms import AddProductForm, AddUserForm, LoginForm
 from django.contrib.auth.models import auth
 from django.contrib.auth import authenticate,login,logout
 from django.contrib.auth.decorators import login_required
+from django.db import DatabaseError, connection
+from django.http import HttpResponse
 
 #logger = logging.getLogger(__name__)
+
+def healthz(request):
+    """Health check for the host (Render polls this after every deploy).
+
+    Touches the database rather than just returning 200, so an instance that
+    boots but cannot reach Supabase is reported unhealthy instead of serving
+    500s. Exempt from the HTTPS redirect via SECURE_REDIRECT_EXEMPT: the probe
+    is internal to the platform and arrives without X-Forwarded-Proto, so
+    otherwise it would only ever see a 301.
+    """
+    try:
+        connection.ensure_connection()
+    except DatabaseError:
+        return HttpResponse("database unavailable\n", status=503, content_type="text/plain")
+    return HttpResponse("ok\n", content_type="text/plain")
 
 def index(request):
     # render the appropriate template for this request

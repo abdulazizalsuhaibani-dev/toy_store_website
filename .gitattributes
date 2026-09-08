@@ -1,0 +1,4 @@
+# build.sh runs on Render's Linux builders. A CRLF shebang there fails with
+# "bad interpreter: /usr/bin/env bash^M", so keep shell scripts LF regardless
+# of the checkout platform.
+*.sh text eol=lf

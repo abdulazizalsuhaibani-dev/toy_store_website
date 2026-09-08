@@ -6,6 +6,18 @@ on:
   pull_request:
     branches: [ "main" ]
 
+env:
+  # DEBUG now defaults to False, which makes a missing key a hard error, so CI
+  # has to supply one. This value signs nothing that outlives the job; it is
+  # padded past 50 characters only to satisfy the security.W009 length check.
+  DJANGO_SECRET_KEY: ci-only-value-not-a-real-secret-key-never-reuse-this-anywhere
+  # Satisfies security.W020 so `check --deploy` runs clean. The real hosts come
+  # from RENDER_EXTERNAL_HOSTNAME and DJANGO_ALLOWED_HOSTS on Render.
+  DJANGO_ALLOWED_HOSTS: ci.example.com
+  # DATABASE_URL and SUPABASE_S3_ENDPOINT stay unset on purpose: settings.py
+  # then falls back to SQLite and local file storage, so CI exercises the same
+  # settings module as production without needing either service.
+
 jobs:
   build:
 
@@ -30,3 +42,14 @@ jobs:
     - name: Run Tests
       run: |
         python manage.py test
+    - name: Deployment checks
+      # Catches an unsafe production setting before it reaches Render rather
+      # than after. DJANGO_DEBUG is unset here, so this runs the DEBUG=False
+      # branch of settings.py.
+      run: |
+        python manage.py check --deploy --fail-level WARNING
+    - name: Collect static
+      # Proves the WhiteNoise manifest builds; it fails loudly on any static
+      # asset referenced but missing.
+      run: |
+        python manage.py collectstatic --no-input
