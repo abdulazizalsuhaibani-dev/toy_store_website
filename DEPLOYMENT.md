@@ -45,6 +45,50 @@ Two ways to get this wrong, both of which fail only once deployed:
 The **session pooler on port 5432** is IPv4 on every tier and is the right
 choice for a long-lived server like gunicorn.
 
+### 1a-bis. Lock PostgREST out of the Django tables
+
+**Do this on any new Supabase project, before or right after the first
+`migrate`.** It is the single most dangerous default in this setup.
+
+Supabase assumes the app talks to Postgres through PostgREST using the `anon`
+and `authenticated` roles, and its default privileges therefore grant those
+roles full `SELECT/INSERT/UPDATE/DELETE/TRUNCATE` on everything in the `public`
+schema, reachable over `https://<ref>.supabase.co/rest/v1/`. Row Level Security
+is what normally contains that, and Django creates its tables without any.
+
+Django does not use PostgREST at all — it connects directly as `postgres`. So
+the grants buy nothing and expose everything: with only the *publishable* key,
+which is designed to be public, anyone can read `auth_user` (password hashes
+and emails), read `django_session` (session keys, so admin sessions can be
+hijacked), and truncate `toymodule_product`.
+
+Run this once in the SQL editor. It cannot affect the application, which
+authenticates as `postgres` and keeps ownership and every privilege:
+
+```sql
+revoke all privileges on all tables    in schema public from anon, authenticated;
+revoke all privileges on all sequences in schema public from anon, authenticated;
+revoke all privileges on all functions in schema public from anon, authenticated;
+revoke usage on schema public from anon, authenticated;
+
+-- Future migrations create tables as `postgres`; without this they inherit the
+-- same permissive defaults and reopen the hole.
+alter default privileges in schema public revoke all on tables    from anon, authenticated;
+alter default privileges in schema public revoke all on sequences from anon, authenticated;
+alter default privileges in schema public revoke all on functions from anon, authenticated;
+```
+
+Verify with a request that should now be refused:
+
+```bash
+curl -s "https://<ref>.supabase.co/rest/v1/auth_user?select=id&limit=1" \
+     -H "apikey: <publishable key>"
+# expect 401 and SQLSTATE 42501, "permission denied"
+```
+
+`get_advisors` / the dashboard's Security Advisor should report no
+`rls_disabled_in_public` findings afterwards.
+
 ### 1b. Storage bucket
 
 **Storage** → **New bucket** → name it `product-images` → mark it **Public**.
@@ -192,4 +236,5 @@ These are properties of the plan, not bugs:
 | `DisallowedHost` | Custom domain missing from `DJANGO_ALLOWED_HOSTS`. |
 | Images 400 or 403 from the bucket | Bucket is not public, or `SUPABASE_S3_CUSTOM_DOMAIN` points at the `/s3` API path rather than `/object/public/<bucket>`. |
 | Uploads fail with a 400 | An ACL is being sent. `default_acl` must stay `None`; Supabase implements no ACLs. |
+| Django tables readable at `https://<ref>.supabase.co/rest/v1/...` | The `anon` grants of step 1a-bis were never revoked, or a later migration recreated the schema and re-inherited them. |
 | Static files 404 in production | Build did not run `collectstatic`, or `whitenoise.middleware.WhiteNoiseMiddleware` is not directly below `SecurityMiddleware`. |
