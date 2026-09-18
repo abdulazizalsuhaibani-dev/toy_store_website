@@ -147,12 +147,20 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                # Language, currency, cart badge and the category nav. Every
+                # page's header renders all four, so they are here rather than
+                # in each view's context dict.
+                'apps.toymodule.context_processors.storefront_context',
             ],
         },
     },
 ]
 
 WSGI_APPLICATION = 'toystorewebsite.wsgi.application'
+
+# See the module docstring: `apps` is a namespace package, which unittest no
+# longer discovers, and tests run before collectstatic has built a manifest.
+TEST_RUNNER = 'toystorewebsite.test_runner.ProjectTestRunner'
 
 
 # Database

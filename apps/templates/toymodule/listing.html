@@ -1,0 +1,57 @@
+{% extends "layouts/base.html" %}
+{% load happybox %}
+
+{% block title %}{% if category %}{% label category %}{% else %}{{ t.navShop }}{% endif %}{% endblock %}
+
+{% block content %}
+
+<section class="hb-pagehead" style="background:{% if category %}{{ category.color }}{% else %}var(--yellow){% endif %}">
+  <span style="position:absolute;top:-40px;inset-inline-end:8%;width:160px;height:160px;border-radius:999px;background:rgba(255,255,255,.3)"></span>
+  <div class="hb-shell hb-pagehead__inner">
+    <nav class="hb-crumbs" aria-label="Breadcrumb">
+      <a href="{% url 'index' %}">{{ t.navHome }}</a> /
+      <a href="{% url 'shop' %}">{{ t.crumbShop }}</a>
+      {% if category %} / <span>{% label category %}</span>{% endif %}
+    </nav>
+    <h1>{% if category %}{% label category %}{% else %}{{ t.navShop }}{% endif %}</h1>
+    <p style="font-size:18px;font-weight:600;margin:0;max-width:44ch">
+      {% if category %}{% blurb category %}{% else %}{{ t.catsSub }}{% endif %}
+    </p>
+  </div>
+</section>
+
+<div class="hb-shell" style="padding-top:26px">
+  <div class="hb-row" style="gap:10px;padding-bottom:22px;border-bottom:var(--line)">
+    <span class="hb-display" style="font-size:18px;margin-inline-end:4px">{{ t.ageLabel }}</span>
+    {% for band in age_bands %}
+      <a class="hb-pill {% if band.selected %}is-on{% endif %}"
+         href="{% querystring request age=band.key %}">{{ band.label }}</a>
+    {% endfor %}
+
+    <div style="margin-inline-start:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span class="hb-small hb-muted">{{ products|length }} {{ t.of }} {{ total }} {{ t.shownOf }}</span>
+      {% for option in sort_options %}
+        <a class="hb-pill hb-pill--sm {% if option.selected %}is-on{% endif %}"
+           href="{% querystring request sort=option.key %}">{{ option.label }}</a>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<section class="hb-shell" style="padding-top:26px">
+  {% if products %}
+    <div class="hb-grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:22px">
+      {% for p in products %}{% include 'includes/product_card.html' with p=p media_height='210px' %}{% endfor %}
+    </div>
+  {% elif age or price or query %}
+    <div class="hb-panel hb-panel--dashed" style="text-align:center;padding:48px 28px">
+      <div class="hb-display" style="font-size:28px;margin-bottom:8px">{{ t.noMatchTitle }}</div>
+      <p class="hb-muted" style="font-size:16px;margin:0 0 20px">{{ t.noMatchBody }}</p>
+      <a class="hb-btn hb-btn--dark hb-btn--sm" href="{% if category %}{% url 'category' category.slug %}{% else %}{% url 'shop' %}{% endif %}">{{ t.clearFilters }}</a>
+    </div>
+  {% else %}
+    {% include 'includes/empty_shelf.html' %}
+  {% endif %}
+</section>
+
+{% endblock content %}

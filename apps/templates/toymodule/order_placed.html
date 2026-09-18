@@ -1,0 +1,58 @@
+{% extends "layouts/base.html" %}
+{% load happybox %}
+
+{% block title %}{{ t.reference }} {{ order.reference }}{% endblock %}
+
+{% block content %}
+<div class="hb-shell hb-shell--narrow" style="padding-top:34px">
+
+  <div class="hb-panel hb-panel--tall" style="text-align:center;background:var(--green-soft)">
+    <div style="display:flex;justify-content:center">
+      {% include 'includes/mascot.html' with mascot_width='180px' %}
+    </div>
+    <h1 style="font-size:clamp(28px,4vw,40px);margin:18px 0 10px">{{ t.thanksTitle }}</h1>
+    <p class="hb-muted" style="font-size:17px;margin:0 0 22px">{{ t.thanksBody }}</p>
+    <div class="hb-eyebrow">{{ t.reference }}</div>
+    <div class="hb-display hb-keep-ltr" style="font-size:38px;letter-spacing:2px">{{ order.reference }}</div>
+  </div>
+
+  <div class="hb-grid hb-grid--split" style="margin-top:30px">
+    <section class="hb-panel">
+      <h2 class="hb-panel-title">{{ t.deliveringTo }}</h2>
+      <address style="font-style:normal;font-size:17px;font-weight:700;line-height:1.6">
+        {{ order.full_name }}<br>
+        {{ order.street }}<br>
+        {{ order.city }}{% if order.postcode %} {{ order.postcode }}{% endif %}<br>
+        <span class="hb-keep-ltr">{{ order.phone }}</span>
+      </address>
+      <p class="hb-small hb-muted" style="margin-top:16px">
+        {% delivery_label order.delivery_option %} · {{ order.get_payment_method_display }}
+        {% if order.gift_wrap %} · {{ t.giftWrap }}{% endif %}
+      </p>
+      {% if order.gift_note %}
+        <blockquote style="margin:16px 0 0;border-inline-start:var(--line);padding-inline-start:16px;font-size:16px">{{ order.gift_note }}</blockquote>
+      {% endif %}
+    </section>
+
+    <section class="hb-panel hb-panel--yellow">
+      <h2 style="font-size:24px;margin-bottom:16px">{{ t.summary }}</h2>
+      <div style="display:grid;gap:10px;padding-bottom:16px;border-bottom:var(--line)">
+        {% for item in order.items.all %}
+          <div style="display:flex;gap:11px;font-size:15px;font-weight:700">
+            <span style="flex:1;min-width:0">{{ item.quantity }} × {{ item.product_name }}</span>
+            <span>{% money_in order.currency_code item.line_total %}</span>
+          </div>
+        {% endfor %}
+      </div>
+      <div class="hb-summary__rows" style="padding:16px 0">
+        <div><span>{{ t.subtotal }}</span><span>{% money_in order.currency_code order.subtotal %}</span></div>
+        <div><span>{{ t.shipping }}</span><span>{% if order.shipping_cost %}{% money_in order.currency_code order.shipping_cost %}{% else %}{{ t.free }}{% endif %}</span></div>
+      </div>
+      <div class="hb-summary__total">
+        <span>{{ t.total }}</span><span>{% money_in order.currency_code order.total %}</span>
+      </div>
+      <a class="hb-btn hb-btn--dark hb-btn--block" href="{% url 'index' %}">{{ t.backHome }}</a>
+    </section>
+  </div>
+</div>
+{% endblock content %}

@@ -1,0 +1,28 @@
+{% extends "admin/base.html" %}
+{% load static %}
+
+{% comment %}
+  Overrides django/contrib/admin/templates/admin/base_site.html purely to add
+  one stylesheet — see static/css/admin_color_scheme.css for what it fixes and
+  why. The three blocks below are copied verbatim from the template this
+  replaces; keep them in step if the admin's own version changes.
+
+  It extends admin/base.html rather than admin/base_site.html because this file
+  *is* admin/base_site.html as far as the loader is concerned, and extending
+  your own name is infinite recursion.
+{% endcomment %}
+
+{% block extrastyle %}{{ block.super }}
+  <link rel="stylesheet" href="{% static 'css/admin_color_scheme.css' %}">
+{% endblock %}
+
+{% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | {{ site_title|default:_('Django site admin') }}{% endblock %}
+
+{% block branding %}
+<div id="site-name"><a href="{% url 'admin:index' %}">{{ site_header|default:_('Django administration') }}</a></div>
+{% if user.is_anonymous %}
+  {% include "admin/color_theme_toggle.html" %}
+{% endif %}
+{% endblock %}
+
+{% block nav-global %}{% endblock %}

@@ -1,0 +1,182 @@
+{% extends "layouts/base.html" %}
+{% load happybox %}
+
+{% block title %}{{ t.coTitle }}{% endblock %}
+
+{% block content %}
+<div class="hb-shell hb-shell--narrow" style="padding-top:34px">
+
+  <h1 style="font-size:clamp(32px,4.5vw,50px);margin-bottom:14px;letter-spacing:-1px">{{ t.coTitle }}</h1>
+
+  <nav class="hb-steps" style="margin-bottom:28px" aria-label="Checkout progress">
+    <a href="{% url 'cart' %}" style="color:var(--muted)">{{ t.step1done }}</a>
+    <span style="color:#C6BFD0">{{ t.chev }}</span>
+    <span class="hb-steps__now">{{ t.step2 }}</span>
+    <span style="color:#C6BFD0">{{ t.chev }}</span>
+    <span>{{ t.step3 }}</span>
+  </nav>
+
+  <form method="post" novalidate>
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}<div class="hb-errors">{{ form.non_field_errors }}</div>{% endif %}
+
+    <div class="hb-grid hb-grid--split">
+      <div style="display:grid;gap:20px">
+
+        <section class="hb-panel">
+          <h2 class="hb-panel-title">{{ t.whereTitle }}</h2>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px">
+            <label class="hb-field">
+              <span>{{ t.fullName }}</span>
+              {{ form.full_name }}
+              {% if form.full_name.errors %}<div class="hb-errors">{{ form.full_name.errors }}</div>{% endif %}
+            </label>
+            <label class="hb-field">
+              <span>{{ t.phone }}</span>
+              {{ form.phone }}
+              {% if form.phone.errors %}<div class="hb-errors">{{ form.phone.errors }}</div>{% endif %}
+            </label>
+            <label class="hb-field" style="grid-column:1/-1">
+              <span>{{ t.street }}</span>
+              {{ form.street }}
+              {% if form.street.errors %}<div class="hb-errors">{{ form.street.errors }}</div>{% endif %}
+            </label>
+            <label class="hb-field">
+              <span>{{ t.city }}</span>
+              {{ form.city }}
+              {% if form.city.errors %}<div class="hb-errors">{{ form.city.errors }}</div>{% endif %}
+            </label>
+            <label class="hb-field">
+              <span>{{ t.postcode }}</span>
+              {{ form.postcode }}
+            </label>
+          </div>
+        </section>
+
+        <section class="hb-panel">
+          <h2 class="hb-panel-title">{{ t.howFast }}</h2>
+          {% if form.delivery_option.errors %}<div class="hb-errors">{{ form.delivery_option.errors }}</div>{% endif %}
+          <div style="display:grid;gap:12px">
+            {% for option in delivery_options %}
+              <label class="hb-radio">
+                <input type="radio" name="delivery_option" value="{{ option.pk }}"
+                       data-shipping="{% delivery_label option %}"
+                       data-cost="{{ option.cost_display }}"
+                       data-total="{{ option.total_display }}"
+                       {% if selected_delivery and selected_delivery.pk == option.pk %}checked{% endif %}>
+                <span class="hb-radio__dot" aria-hidden="true"></span>
+                <span style="flex:1;min-width:0">
+                  <span class="hb-radio__label">{% delivery_label option %}</span>
+                  <span class="hb-radio__note">
+                    {% delivery_note option %}{% if option.free_over %} {% money option.free_over %}{% endif %}
+                  </span>
+                </span>
+                <span class="hb-display" style="font-size:19px">{{ option.cost_display }}</span>
+              </label>
+            {% endfor %}
+          </div>
+        </section>
+
+        <section class="hb-panel" style="background:{% if form.gift_wrap.value %}var(--green-soft){% else %}#fff{% endif %}">
+          <label class="form-check" style="margin-bottom:14px">
+            {{ form.gift_wrap }}
+            <span class="hb-display" style="font-size:24px">{{ t.giftTitle }}</span>
+          </label>
+          <label class="hb-field">
+            <span>{{ t.giftNote }}</span>
+            <textarea name="gift_note" placeholder="{{ t.giftPh }}">{{ form.gift_note.value|default:'' }}</textarea>
+          </label>
+        </section>
+
+        <section class="hb-panel">
+          <h2 class="hb-panel-title">{{ t.payment }}</h2>
+          <div class="hb-row" style="gap:10px;margin-bottom:16px">
+            {% for value, display in payment_choices %}
+              <label class="hb-pill" style="cursor:pointer">
+                <input type="radio" name="payment_method" value="{{ value }}"
+                       style="width:auto;min-width:0;margin:0"
+                       {% if form.payment_method.value == value %}checked{% endif %}>
+                {% if value == 'card' %}{{ t.payCard }}{% elif value == 'apple' %}{{ t.payApple }}{% else %}{{ t.payCod }}{% endif %}
+              </label>
+            {% endfor %}
+          </div>
+
+          {% comment %}
+            Card fields are rendered because the design has them, and are
+            deliberately nameless: nothing here is posted, nothing is stored,
+            and there is no payment processor behind this page.
+          {% endcomment %}
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:14px">
+            <label class="hb-field" style="grid-column:1/-1">
+              <span>{{ t.cardNumber }}</span>
+              <input type="text" inputmode="numeric" autocomplete="off" placeholder="4242 4242 4242 4242" disabled>
+            </label>
+            <label class="hb-field">
+              <span>{{ t.expiry }}</span>
+              <input type="text" autocomplete="off" placeholder="09 / 29" disabled>
+            </label>
+            <label class="hb-field">
+              <span>{{ t.cvc }}</span>
+              <input type="text" autocomplete="off" placeholder="123" disabled>
+            </label>
+          </div>
+          <p class="hb-small hb-muted" style="margin:14px 0 0">{{ t.demoPayNote }}</p>
+        </section>
+      </div>
+
+      <aside class="hb-panel hb-panel--yellow hb-summary">
+        <h2 style="font-size:26px;margin-bottom:16px">{{ count }} {% if count == 1 %}{{ t.inBoxSuffixOne }}{% else %}{{ t.inBoxSuffix }}{% endif %}</h2>
+        <div style="display:grid;gap:10px;padding-bottom:16px;border-bottom:var(--line)">
+          {% for item in items %}
+            <div style="display:flex;gap:11px;align-items:center;font-size:15px;font-weight:700">
+              <span style="width:34px;height:34px;border:var(--line);border-radius:11px;flex-shrink:0;background:{{ item.product.card_color }}"></span>
+              <span style="flex:1;min-width:0">{{ item.quantity }} × {% label item.product %}</span>
+              <span>{% money item.line_total %}</span>
+            </div>
+          {% endfor %}
+        </div>
+        <div class="hb-summary__rows" style="padding:16px 0">
+          <div><span>{{ t.subtotal }}</span><span>{% money subtotal %}</span></div>
+          <div>
+            <span data-summary="shipping-label">{% delivery_label selected_delivery %}</span>
+            <span data-summary="shipping-cost">{% if shipping %}{% money shipping %}{% else %}{{ t.free }}{% endif %}</span>
+          </div>
+          <div><span>{{ t.giftWrap }}</span><span>{% if form.gift_wrap.value %}{{ t.free }}{% else %}—{% endif %}</span></div>
+        </div>
+        <div class="hb-summary__total">
+          <span>{{ t.total }}</span><span data-summary="total">{% money total %}</span>
+        </div>
+        <button type="submit" class="hb-btn hb-btn--primary hb-btn--block" style="font-size:24px;padding:18px">{{ t.placeOrder }}</button>
+        <p class="hb-small" style="text-align:center;margin:14px 0 0;color:#5c4a10;line-height:1.5">{{ t.coFoot1 }}<br>{{ t.coFoot2 }}</p>
+      </aside>
+    </div>
+  </form>
+</div>
+
+{% comment %}
+  Progressive enhancement only: keeps the summary in step with the delivery
+  radio. Every figure it writes was rendered by Django in the correct
+  currency, so nothing here does money arithmetic. With JS off the summary
+  shows the default option's figures, and the server recalculates the real
+  total on POST either way.
+{% endcomment %}
+<script>
+  (function () {
+    var out = {
+      label: document.querySelector('[data-summary="shipping-label"]'),
+      cost: document.querySelector('[data-summary="shipping-cost"]'),
+      total: document.querySelector('[data-summary="total"]')
+    };
+    if (!out.label || !out.cost || !out.total) return;
+    document.querySelectorAll('input[name="delivery_option"]').forEach(function (radio) {
+      radio.addEventListener('change', function () {
+        if (!radio.checked) return;
+        out.label.textContent = radio.dataset.shipping;
+        out.cost.textContent = radio.dataset.cost;
+        out.total.textContent = radio.dataset.total;
+      });
+    });
+  })();
+</script>
+{% endblock content %}

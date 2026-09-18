@@ -1,0 +1,14 @@
+{% load happybox %}
+{% comment %}
+  A product photo, or a placeholder where there isn't one.
+
+  `picture.png` is the model's historical default for `pimage` and is not a
+  file that exists, so a row carrying it must be treated as having no photo —
+  otherwise every such card renders a broken-image icon. The design used a
+  drop-slot here; the nearest honest equivalent is the category's own glyph.
+{% endcomment %}
+{% if product.pimage and product.pimage.name and product.pimage.name != 'picture.png' %}
+  <img src="{{ product.pimage.url }}" alt="{% label product %}" loading="lazy">
+{% else %}
+  <span class="hb-slot" aria-hidden="true">{{ product.category.glyph|default:"🧸" }}</span>
+{% endif %}

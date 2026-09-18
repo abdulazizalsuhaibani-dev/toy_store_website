@@ -1,0 +1,38 @@
+{% load happybox %}
+{% comment %}
+  One product card, used by the homepage, both listing screens and search.
+  Expects `p`. The design's card is identical in all four places apart from
+  its height, so that is the only thing parameterised (`media_height`).
+{% endcomment %}
+<article class="hb-card">
+  {% comment %}
+    The photo links to the same page as the title below it, so it is hidden
+    from assistive tech and skipped in the tab order rather than announced
+    twice — and with no photo it would otherwise be a link with no name at all.
+  {% endcomment %}
+  <a class="hb-card__media" href="{% url 'product' p.slug %}" tabindex="-1" aria-hidden="true"
+     style="height:{{ media_height|default:'200px' }};background:{{ p.card_color }}">
+    {% include 'includes/product_image.html' with product=p %}
+    {% if p.badge %}
+      <span class="hb-card__badge hb-badge" style="background:{{ p.badge_color }}">{% badge_label p %}</span>
+    {% endif %}
+  </a>
+  <div class="hb-card__body">
+    <a class="hb-card__name" href="{% url 'product' p.slug %}">{% label p %}</a>
+    <div class="hb-card__meta">
+      <span class="hb-chip">{{ t.ages }} <span class="hb-keep-ltr">{{ p.age_label }}</span></span>
+      {% if p.review_count %}<span>★ {{ p.rating }} ({{ p.review_count }})</span>{% endif %}
+    </div>
+    <div class="hb-card__foot">
+      <span class="hb-price">{% money p.pprice %}</span>
+      {% if p.in_stock %}
+        <form method="post" action="{% url 'cart-add' p.pk %}">
+          {% csrf_token %}
+          <button type="submit" class="hb-add" aria-label="{{ t.add }} — {% label p %}">+</button>
+        </form>
+      {% else %}
+        <span class="hb-small hb-muted">{{ t.outOfStock }}</span>
+      {% endif %}
+    </div>
+  </div>
+</article>

@@ -1,10 +1,16 @@
 {% extends "layouts/base.html" %}
 
-{% block title %} Sign up {% endblock %}
+{% block title %}{{ t.registerDone }}{% endblock %}
 
 {% block content %}
-<h2>Sign up</h2>
-<br>
-<p style="color:green">Register successfully done!</p>
-<a href= '/login'>Go to sign in page</a>
+<div class="hb-shell" style="padding-top:44px;max-width:560px">
+  <div class="hb-panel hb-panel--tall" style="text-align:center;background:var(--green-soft)">
+    <div style="display:flex;justify-content:center">
+      {% include 'includes/mascot.html' with mascot_width='160px' %}
+    </div>
+    <h1 style="font-size:34px;margin:16px 0 8px">{{ t.registerDone }}</h1>
+    <p class="hb-muted" style="font-size:17px;margin:0 0 24px">{{ t.registerDoneBody }}</p>
+    <a class="hb-btn hb-btn--primary" href="{% url 'login' %}">{{ t.signIn }}</a>
+  </div>
+</div>
 {% endblock content %}

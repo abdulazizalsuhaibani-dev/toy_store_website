@@ -1,0 +1,23 @@
+/* Tell the browser which colour scheme the admin is actually painted in.
+ *
+ * Django 5.0's admin swaps its own CSS variables under
+ * `@media (prefers-color-scheme: dark)` (see admin/css/dark_mode.css) but never
+ * sets the `color-scheme` property. The parts of a form the browser draws
+ * itself — the <select> dropdown list above all — therefore keep rendering in
+ * the default light scheme while the admin paints its option text #EEE. Light
+ * text on a light popup is a list of blank rows.
+ *
+ * Declaring color-scheme fixes the dropdown and, with it, scrollbars, number
+ * spinners and the date/time pickers. Three cases, because the admin's own
+ * theme toggle (admin/js/theme.js) writes data-theme onto <html> and must win
+ * over the OS preference in both directions.
+ *
+ * Delete this file if a future Django sets color-scheme itself.
+ */
+
+@media (prefers-color-scheme: dark) {
+  html { color-scheme: dark; }
+}
+
+html[data-theme="dark"] { color-scheme: dark; }
+html[data-theme="light"] { color-scheme: light; }

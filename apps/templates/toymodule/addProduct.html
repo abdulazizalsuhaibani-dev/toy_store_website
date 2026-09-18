@@ -1,16 +1,21 @@
 {% extends "layouts/base.html" %}
 {% load crispy_forms_tags %}
 
-{% block title %} Add Product {% endblock %}
+{% block title %}{{ t.addProduct }}{% endblock %}
 
 {% block content %}
+<div class="hb-shell" style="padding-top:44px;max-width:720px">
+  <h1 style="font-size:clamp(32px,5vw,44px);margin-bottom:8px">{{ t.addProduct }}</h1>
+  <p class="hb-muted" style="margin:0 0 24px">{{ t.addProductBody }}</p>
 
-<h2>Add Product</h2>
-<br>
-<form method = "POST" enctype="multipart/form-data">
-    {% csrf_token %}
-    {{form|crispy}}
-    <input type="submit" name="Submit">
-</form> 
+  <div class="hb-panel">
+    <form method="post" enctype="multipart/form-data" novalidate>
+      {% csrf_token %}
+      {{ form|crispy }}
+      <button type="submit" class="hb-btn hb-btn--primary hb-btn--block">{{ t.save }}</button>
+    </form>
+  </div>
 
+  <p style="margin-top:20px"><a href="{% url 'dashboard' %}">{{ t.backTo }} {{ t.dashboard }}</a></p>
+</div>
 {% endblock content %}

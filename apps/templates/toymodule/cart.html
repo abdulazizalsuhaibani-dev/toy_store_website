@@ -1,0 +1,102 @@
+{% extends "layouts/base.html" %}
+{% load happybox %}
+
+{% block title %}{{ t.cartTitle }}{% endblock %}
+
+{% block content %}
+<div class="hb-shell hb-shell--narrow" style="padding-top:34px">
+
+  <div class="hb-row" style="gap:16px;margin-bottom:6px">
+    <h1 style="font-size:clamp(34px,5vw,54px);letter-spacing:-1px">{{ t.cartTitle }}</h1>
+    <span class="hb-badge hb-badge--flat" style="background:var(--blue);font-size:17px;padding:6px 16px">{{ count }} {% if count == 1 %}{{ t.item }}{% else %}{{ t.items }}{% endif %}</span>
+  </div>
+
+  <nav class="hb-steps" style="margin-bottom:26px" aria-label="Checkout progress">
+    <span style="color:var(--ink)">{{ t.step1 }}</span><span>{{ t.chev }}</span>
+    <span>{{ t.step2 }}</span><span>{{ t.chev }}</span>
+    <span>{{ t.step3 }}</span>
+  </nav>
+
+  {% if items %}
+    <div class="hb-grid hb-grid--split">
+      <div style="display:grid;gap:16px">
+        {% for item in items %}
+          <div class="hb-line">
+            <a class="hb-line__thumb" href="{% url 'product' item.product.slug %}" style="background:{{ item.product.card_color }}">
+              {% include 'includes/product_image.html' with product=item.product %}
+            </a>
+
+            <div style="flex:1;min-width:150px">
+              <a class="hb-line__name" href="{% url 'product' item.product.slug %}">{% label item.product %}</a>
+              <div class="hb-small hb-muted" style="margin-top:4px">
+                {{ t.ages }} <span class="hb-keep-ltr">{{ item.product.age_label }}</span> · {% money item.product.pprice %} {{ t.each }}
+              </div>
+              <form method="post" action="{% url 'cart-update' item.pk %}" style="margin-top:8px">
+                {% csrf_token %}
+                <input type="hidden" name="quantity" value="0">
+                <button type="submit" class="hb-reset hb-small" style="color:var(--red-link);border-bottom:2px solid var(--coral-soft)">{{ t.remove }}</button>
+              </form>
+            </div>
+
+            {% comment %}
+              Two one-button forms rather than a number input: the design's
+              −/+ is the affordance, and this keeps it working with no JS.
+            {% endcomment %}
+            <div class="hb-stepper hb-stepper--sm">
+              <form method="post" action="{% url 'cart-update' item.pk %}">
+                {% csrf_token %}<input type="hidden" name="delta" value="-1">
+                <button type="submit" aria-label="{{ t.remove }} 1">−</button>
+              </form>
+              <span class="hb-stepper__value">{{ item.quantity }}</span>
+              <form method="post" action="{% url 'cart-update' item.pk %}">
+                {% csrf_token %}<input type="hidden" name="delta" value="1">
+                <button type="submit" aria-label="{{ t.add }} 1">+</button>
+              </form>
+            </div>
+
+            <span class="hb-line__total">{% money item.line_total %}</span>
+          </div>
+        {% endfor %}
+
+        <form method="post" action="{% url 'cart-gift' %}">
+          {% csrf_token %}
+          <button type="submit" class="hb-check {% if cart.gift_wrap %}is-on{% endif %}"
+                  aria-pressed="{% if cart.gift_wrap %}true{% else %}false{% endif %}">
+            <span class="hb-check__mark" aria-hidden="true">{% if cart.gift_wrap %}✓{% endif %}</span>
+            <span>
+              <span class="hb-display" style="font-size:21px;display:block">{{ t.wrapTitle }}</span>
+              <span style="font-size:15px;font-weight:600;color:#4a4356">{{ t.wrapBody }}</span>
+            </span>
+          </button>
+        </form>
+
+        <a href="{% url 'shop' %}" style="font-family:var(--display);font-weight:700;font-size:18px">{{ t.keepShopping }}</a>
+      </div>
+
+      <div class="hb-panel hb-panel--yellow hb-summary">
+        <h2 style="font-size:26px;margin-bottom:18px">{{ t.summary }}</h2>
+        <div class="hb-summary__rows">
+          <div><span>{{ t.subtotal }}</span><span>{% money subtotal %}</span></div>
+          <div><span>{{ t.shipping }}</span><span>{% if shipping %}{% money shipping %}{% else %}{{ t.free }}{% endif %}</span></div>
+          <div><span>{{ t.giftWrap }}</span><span>{% if cart.gift_wrap %}{{ t.free }}{% else %}—{% endif %}</span></div>
+        </div>
+        <div class="hb-summary__total">
+          <span>{{ t.total }}</span><span>{% money total %}</span>
+        </div>
+        <a class="hb-btn hb-btn--primary hb-btn--block" style="font-size:25px;padding:18px" href="{% url 'checkout' %}">{{ t.goCheckout }}</a>
+        <p class="hb-small" style="text-align:center;margin:14px 0 0;color:#5c4a10;line-height:1.5">{{ t.cartFoot1 }}<br>{{ t.cartFoot2 }}</p>
+      </div>
+    </div>
+
+  {% else %}
+    <div class="hb-panel hb-panel--tall" style="text-align:center">
+      <div style="display:flex;justify-content:center">
+        {% include 'includes/mascot.html' with mascot_width='170px' %}
+      </div>
+      <div class="hb-display" style="font-size:32px;margin:16px 0 8px">{{ t.emptyTitle }}</div>
+      <p class="hb-muted" style="font-size:17px;margin:0 0 24px">{{ t.emptyBody }}</p>
+      <a class="hb-btn hb-btn--primary" href="{% url 'shop' %}">{{ t.emptyCta }}</a>
+    </div>
+  {% endif %}
+</div>
+{% endblock content %}

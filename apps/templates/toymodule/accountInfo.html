@@ -1,12 +1,18 @@
 {% extends "layouts/base.html" %}
 
-{% block title %} Your Profile {% endblock %}
+{% block title %}{{ t.yourProfile }}{% endblock %}
 
 {% block content %}
-<h2>Your profile</h2>
-<br>
-<p>Username: {{username}}</p>
-<p>Email: {{email}}</p>
-<br>
-<p>Back to <a href = '/dashboard'> Dashboard </a> </p>
+<div class="hb-shell" style="padding-top:44px;max-width:560px">
+  <h1 style="font-size:clamp(32px,5vw,44px);margin-bottom:24px">{{ t.yourProfile }}</h1>
+
+  <div class="hb-panel">
+    <div class="hb-specs">
+      <div><span class="hb-specs__key">{{ t.username }}</span><span>{{ username }}</span></div>
+      <div><span class="hb-specs__key">{{ t.email }}</span><span class="hb-keep-ltr">{{ email|default:"—" }}</span></div>
+    </div>
+  </div>
+
+  <p style="margin-top:20px"><a href="{% url 'dashboard' %}">{{ t.backTo }} {{ t.dashboard }}</a></p>
+</div>
 {% endblock content %}

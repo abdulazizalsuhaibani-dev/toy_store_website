@@ -1,35 +1,121 @@
-from django.forms import ModelForm
-from .models import Product
-from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
-from django.contrib.auth.models import User
 from django import forms
+from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
+from django.contrib.auth.models import User
+from django.forms import ModelForm
 from django.forms.widgets import PasswordInput, TextInput
 
+from .models import DeliveryOption, Order, Product
+
+
 class AddProductForm(ModelForm):
+    """The staff-facing form behind /addProduct.
+
+    Fields are listed explicitly rather than `__all__`: the model now carries
+    columns nobody types by hand (`slug`, `created_at`), and `__all__` would
+    have put them on the page the moment they were added.
+
+    `pcategory` used to be a free-text CharField here, so two products could
+    sit in "Baby toys" and "Baby Toys" and only one of them would ever show up
+    on the category page. It is a ForeignKey now, which makes that unspellable.
+    """
+
     class Meta:
         model = Product
-        fields = '__all__'
-    """CATEGORIES_CHOICES = (
-        (1, "Baby Toys"),
-        (2, "Cars and Bikes"),
-        (3, "Dolls and Playsets"),
-        (4, "Outdoors"),
-        (5, "Others"),
-    )
-    
-    name = forms.CharField(max_length = 100)
-    image = forms.ImageField()
-    price = forms.FloatField()
-    category = forms.ChoiceField(choices=CATEGORIES_CHOICES)"""
+        fields = [
+            "pname",
+            "pname_ar",
+            "pimage",
+            "pprice",
+            "category",
+            "blurb",
+            "blurb_ar",
+            "age_min",
+            "age_max",
+            "pieces",
+            "play_type",
+            "badge",
+            "card_color",
+            "rating",
+            "review_count",
+            "in_stock",
+            "is_featured",
+        ]
+        labels = {
+            "pname": "Name",
+            "pname_ar": "Name (Arabic)",
+            "pimage": "Photo",
+            "pprice": "Price",
+            "blurb": "Description",
+            "blurb_ar": "Description (Arabic)",
+            "age_min": "Youngest age",
+            "age_max": "Oldest age",
+            "card_color": "Card colour",
+            "review_count": "Number of reviews",
+        }
+        help_texts = {
+            "card_color": "Hex colour behind the photo on the product card, e.g. #CDEBFB.",
+            "is_featured": "Show this toy in the 'Flying off the shelves' row on the homepage.",
+        }
+        widgets = {
+            "blurb": forms.Textarea(attrs={"rows": 3}),
+            "blurb_ar": forms.Textarea(attrs={"rows": 3}),
+            "card_color": forms.TextInput(attrs={"type": "color"}),
+        }
+
+    def clean(self):
+        cleaned = super().clean()
+        low, high = cleaned.get("age_min"), cleaned.get("age_max")
+        if low is not None and high is not None and low > high:
+            self.add_error("age_max", "The oldest age cannot be below the youngest age.")
+        return cleaned
+
 
 class AddUserForm(UserCreationForm):
-    
     class Meta:
-        
         model = User
-        fields = ['username','email','password1','password2']
-        
+        fields = ["username", "email", "password1", "password2"]
+
+
 class LoginForm(AuthenticationForm):
-    
     username = forms.CharField(widget=TextInput())
     password = forms.CharField(widget=PasswordInput())
+
+
+class CheckoutForm(ModelForm):
+    """Delivery address, delivery speed, payment method and the gift note.
+
+    Card fields are deliberately absent from the model and from this form. The
+    checkout screen renders number/expiry/CVC inputs because the design has
+    them, but they are unnamed and never posted: this is a demo shop with no
+    payment processor, and a public repo is the last place to start collecting
+    card numbers into a database. `Order.payment_method` records the choice,
+    nothing more.
+    """
+
+    class Meta:
+        model = Order
+        fields = [
+            "full_name",
+            "phone",
+            "street",
+            "city",
+            "postcode",
+            "delivery_option",
+            "payment_method",
+            "gift_wrap",
+            "gift_note",
+        ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["delivery_option"].queryset = DeliveryOption.objects.all()
+        self.fields["delivery_option"].empty_label = None
+        self.fields["postcode"].required = False
+        self.fields["gift_note"].required = False
+
+    def clean(self):
+        cleaned = super().clean()
+        # A note typed and then un-ticked should not travel with the parcel.
+        if not cleaned.get("gift_wrap"):
+            cleaned["gift_note"] = ""
+        return cleaned

@@ -1,24 +1,30 @@
-<!DOCTYPE html>
-<html lang="en">
-   <head>
-      <meta charset="utf-8">
-      <meta name="viewport" content="width=device-width">
-      <link rel="stylesheet" type="text/css" href="https://bootswatch.com/5/cerulean/bootstrap.min.css">
-      <title>
-         Toy Store - {% block title %}{% endblock %}
-      </title>
-      <style>
-         
-      </style>
-      <!-- here you put your js-->
-   </head>
-   <body>
-      
-      {% include 'includes/header.html' %}
-      <div class = "container">
-         {% block content %}
-         {% endblock content %}
-      </div>
-      {% include 'includes/footer.html' %}
-   </body>
+{% load static %}<!DOCTYPE html>
+<html lang="{{ lang }}" dir="{{ text_dir }}">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}{% endblock %} · {{ t.brand }}</title>
+    <meta name="description" content="{{ t.heroBody }}">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    {% comment %}
+      Baloo 2 for display, Nunito for body, plus their Arabic counterparts —
+      Baloo Bhaijaan 2 and Cairo — so the RTL side of the site keeps the same
+      voice instead of falling back to a system serif.
+    {% endcomment %}
+    <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Baloo+Bhaijaan+2:wght@500;600;700;800&family=Cairo:wght@400;600;700;900&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'css/happybox.css' %}">
+    {% block head %}{% endblock %}
+  </head>
+  <body>
+    <a class="hb-skip" href="#main">Skip to content</a>
+    {% include 'includes/header.html' %}
+
+    <main id="main" class="hb-main">
+      {% block content %}{% endblock content %}
+    </main>
+
+    {% include 'includes/footer.html' %}
+  </body>
 </html>

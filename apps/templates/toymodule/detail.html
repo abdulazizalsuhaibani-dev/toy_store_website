@@ -1,0 +1,103 @@
+{% extends "layouts/base.html" %}
+{% load happybox %}
+
+{% block title %}{% label product %}{% endblock %}
+
+{% block content %}
+<div class="hb-shell" style="padding-top:24px">
+
+  {% if product.category %}
+    <a href="{% url 'category' product.category.slug %}" class="hb-small hb-muted" style="display:inline-block;margin-bottom:20px">
+      {{ t.backTo }} {% label product.category %}
+    </a>
+  {% endif %}
+
+  <div class="hb-detail">
+    <div>
+      <div class="hb-detail__main" style="background:{{ product.card_color }}">
+        {% include 'includes/product_image.html' with product=product %}
+        {% if product.badge %}
+          <span class="hb-badge" style="position:absolute;top:18px;inset-inline-start:18px;font-size:17px;padding:7px 17px;background:{{ product.badge_color }}">{% badge_label product %}</span>
+        {% endif %}
+      </div>
+    </div>
+
+    <div>
+      <h1 class="hb-detail__title">{% label product %}</h1>
+
+      {% if product.review_count %}
+        <p class="hb-small hb-muted" style="margin:0 0 20px">
+          ★★★★★ {{ product.rating }} · {{ product.review_count }} {{ t.reviewsSuffix }}
+        </p>
+      {% endif %}
+
+      <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:22px;flex-wrap:wrap">
+        <span class="hb-detail__price">{% money product.pprice %}</span>
+        {% if product.in_stock %}
+          <span class="hb-small" style="color:var(--green)">{{ t.inStock }}</span>
+        {% else %}
+          <span class="hb-small" style="color:var(--red-link)">{{ t.outOfStock }}</span>
+        {% endif %}
+      </div>
+
+      <div class="hb-row" style="margin-bottom:26px">
+        <div class="hb-fact" style="background:var(--lilac)">
+          <div class="hb-fact__label">{{ t.ageRange }}</div>
+          <div class="hb-fact__value"><span class="hb-keep-ltr">{{ product.age_label }}</span> {{ t.years }}</div>
+        </div>
+        <div class="hb-fact" style="background:var(--green-soft)">
+          <div class="hb-fact__label">{{ t.pieces }}</div>
+          <div class="hb-fact__value">{{ product.pieces }}</div>
+        </div>
+        <div class="hb-fact" style="background:var(--blue-soft)">
+          <div class="hb-fact__label">{{ t.playType }}</div>
+          <div class="hb-fact__value">{% play_label product %}</div>
+        </div>
+      </div>
+
+      {% if product.blurb or product.blurb_ar %}
+        <p style="font-size:18px;line-height:1.6;font-weight:600;color:#4a4356;margin:0 0 28px;max-width:52ch">{% blurb product %}</p>
+      {% endif %}
+
+      {% if product.in_stock %}
+        <form method="post" action="{% url 'cart-add' product.pk %}"
+              style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
+          {% csrf_token %}
+          <input type="hidden" name="next" value="cart">
+          {% comment %}
+            A plain number input rather than the design's −/+ buttons: those
+            need JavaScript to change a value without a round trip, and one
+            box that works everywhere beats two that need a script.
+          {% endcomment %}
+          <label class="hb-stepper" style="padding-inline-start:18px;gap:10px">
+            <span class="hb-eyebrow">{{ t.quantity }}</span>
+            <input type="number" name="quantity" value="1" min="1" max="99" inputmode="numeric"
+                   style="width:78px;border:0;background:transparent;box-shadow:none;font-family:var(--display);font-weight:800;font-size:22px;text-align:center;padding:12px 0">
+          </label>
+          <button type="submit" class="hb-btn hb-btn--primary" style="flex:1;min-width:220px;font-size:25px;padding:17px 32px">{{ t.addToCart }}</button>
+        </form>
+        <p class="hb-small hb-muted" style="margin:0 0 28px">{{ t.detailNote }}</p>
+      {% endif %}
+
+      <div style="border-top:var(--line);padding-top:20px">
+        <h2 style="font-size:22px;margin-bottom:12px">{{ t.grownups }}</h2>
+        <div class="hb-specs">
+          <div><span class="hb-specs__key">{{ t.materials }}</span><span>{{ t.materialsV }}</span></div>
+          <div><span class="hb-specs__key">{{ t.safety }}</span><span>{{ t.safetyV }}</span></div>
+          <div><span class="hb-specs__key">{{ t.care }}</span><span>{{ t.careV }}</span></div>
+          <div><span class="hb-specs__key">{{ t.boxSize }}</span><span>{{ t.boxSizeV }}</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% if related %}
+    <section style="margin-top:56px">
+      <h2 style="font-size:clamp(26px,3.5vw,38px);margin-bottom:22px">{{ t.relatedTitle }}</h2>
+      <div class="hb-grid" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr))">
+        {% for p in related %}{% include 'includes/product_card.html' with p=p media_height='150px' %}{% endfor %}
+      </div>
+    </section>
+  {% endif %}
+</div>
+{% endblock content %}

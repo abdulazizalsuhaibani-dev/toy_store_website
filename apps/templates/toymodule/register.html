@@ -1,15 +1,21 @@
 {% extends "layouts/base.html" %}
 {% load crispy_forms_tags %}
 
-{% block title %} Sign up {% endblock %}
+{% block title %}{{ t.signUp }}{% endblock %}
 
 {% block content %}
-<h2>Sign up</h2>
-<br>
-<form method = "post">
-    {% csrf_token %}
-    {{registerform|crispy}}
-    <button type="submit" value="Sign up">Sign Up</button>
-    <p style="color:red;"></p>
-</form> 
+<div class="hb-shell" style="padding-top:44px;max-width:560px">
+  <h1 style="font-size:clamp(32px,5vw,44px);margin-bottom:8px">{{ t.joinUs }}</h1>
+  <p class="hb-muted" style="margin:0 0 24px">{{ t.catsSub }}</p>
+
+  <div class="hb-panel">
+    <form method="post" novalidate>
+      {% csrf_token %}
+      {{ registerform|crispy }}
+      <button type="submit" class="hb-btn hb-btn--primary hb-btn--block">{{ t.signUp }}</button>
+    </form>
+  </div>
+
+  <p style="margin-top:20px">{{ t.haveAccount }} <a href="{% url 'login' %}">{{ t.signIn }}</a></p>
+</div>
 {% endblock content %}

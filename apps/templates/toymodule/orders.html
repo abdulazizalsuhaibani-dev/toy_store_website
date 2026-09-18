@@ -1,0 +1,39 @@
+{% extends "layouts/base.html" %}
+{% load happybox %}
+
+{% block title %}{{ t.yourOrders }}{% endblock %}
+
+{% block content %}
+<div class="hb-shell hb-shell--narrow" style="padding-top:44px">
+  <h1 style="font-size:clamp(32px,5vw,48px);margin-bottom:8px">{{ t.yourOrders }}</h1>
+  <p class="hb-muted" style="margin:0 0 30px">{{ t.yourOrdersBody }}</p>
+
+  {% if orders %}
+    <div style="display:grid;gap:16px">
+      {% for order in orders %}
+        <div class="hb-line" style="align-items:flex-start">
+          <div style="flex:1;min-width:200px">
+            <a class="hb-line__name hb-keep-ltr" href="{% url 'order-placed' order.reference %}">{{ order.reference }}</a>
+            <div class="hb-small hb-muted" style="margin-top:4px">
+              {{ order.created_at|date:"j M Y" }} · {% delivery_label order.delivery_option %} · {{ order.get_payment_method_display }}
+            </div>
+            <ul style="margin:10px 0 0;padding:0;list-style:none;font-size:15px;font-weight:700">
+              {% for item in order.items.all %}
+                <li>{{ item.quantity }} × {{ item.product_name }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+          <span class="hb-line__total">{% money_in order.currency_code order.total %}</span>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="hb-panel hb-panel--dashed" style="text-align:center;padding:48px 28px">
+      <p class="hb-muted" style="font-size:17px;margin:0 0 20px">{{ t.noOrders }}</p>
+      <a class="hb-btn hb-btn--primary hb-btn--sm" href="{% url 'shop' %}">{{ t.emptyCta }}</a>
+    </div>
+  {% endif %}
+
+  <p style="margin-top:20px"><a href="{% url 'dashboard' %}">{{ t.backTo }} {{ t.dashboard }}</a></p>
+</div>
+{% endblock content %}

@@ -1,22 +1,99 @@
 {% extends "layouts/base.html" %}
+{% load happybox %}
 
-{% block title %} Main Page {% endblock %}
+{% block title %}{{ t.navHome }}{% endblock %}
 
 {% block content %}
-<h1>Welcome to Toy Shop!</h1>
-<br>
-<table style="width:100%" class="table table-hover">
-    <tr>
-      <th>Product Picture</th>
-      <th>Product Name</th>
-      <th>Price</th>
-    </tr>
-    {%for p in products%}
-    <tr>
-      <td><img src = "{{p.pimage.url}}" width = '100' height = '100'></td>
-      <td>{{p.pname}}</td>
-      <td>{{p.pprice}} SAR</td>
-    </tr>
-    {%endfor%}
-  </table>
+
+<section class="hb-hero">
+  {# Clouds and sparkles. Purely atmosphere, so none of it is in the a11y tree. #}
+  <span class="hb-hero__blob hb-anim-float" style="top:40px;inset-inline-start:6%;width:120px;height:56px"></span>
+  <span class="hb-hero__blob" style="top:110px;inset-inline-end:12%;width:180px;height:74px;opacity:.75"></span>
+  <span class="hb-hero__blob" style="bottom:120px;inset-inline-start:44%;width:90px;height:44px;opacity:.6"></span>
+  <svg viewBox="0 0 24 24" class="hb-anim-spin" style="position:absolute;top:60px;inset-inline-end:32%;width:34px;height:34px"
+       fill="#FFC93C" aria-hidden="true"><path d="M12 2l2.6 6.6L21.5 9l-5 4.6L18 21l-6-3.4L6 21l1.5-7.4L2.5 9l6.9-.4z"/></svg>
+  <svg viewBox="0 0 24 24" style="position:absolute;top:34px;inset-inline-start:13%;width:24px;height:24px"
+       fill="#FF74B8" aria-hidden="true"><path d="M12 2l2.6 6.6L21.5 9l-5 4.6L18 21l-6-3.4L6 21l1.5-7.4L2.5 9l6.9-.4z"/></svg>
+
+  <div class="hb-shell hb-hero__inner">
+    <div>
+      <span class="hb-badge hb-badge--flat" style="margin-bottom:18px">{{ t.freeShipOver }} {{ free_shipping_text }} 🚚</span>
+      <h1 class="hb-hero__title">{{ t.heroTitle1 }}<br>{{ t.heroTitle2 }}</h1>
+      <p class="hb-hero__body">{{ t.heroBody }}</p>
+      <div class="hb-row" style="gap:14px">
+        <a class="hb-btn hb-btn--primary" style="font-size:22px;padding:17px 34px" href="{% url 'shop' %}?age=3-6">{{ t.ctaShopAge }}</a>
+        <a class="hb-btn" style="font-size:22px;padding:17px 34px" href="{% url 'search' %}">{{ t.ctaGift }}</a>
+      </div>
+    </div>
+
+    <div style="display:flex;justify-content:center;align-items:flex-end">
+      <div style="position:relative;display:flex;max-width:340px">
+        {% include 'includes/mascot.html' %}
+        <span class="hb-hero__speech">{{ t.mascotHi }}</span>
+      </div>
+    </div>
+  </div>
+
+  <svg viewBox="0 0 1440 60" preserveAspectRatio="none" class="hb-hero__wave" aria-hidden="true">
+    <path d="M0,32 C120,62 240,2 360,32 C480,62 600,2 720,32 C840,62 960,2 1080,32 C1200,62 1320,2 1440,32 L1440,62 L0,62 Z" fill="#FFF7EC"/>
+  </svg>
+</section>
+
+{% if categories %}
+<section class="hb-shell hb-section">
+  <div class="hb-row" style="align-items:baseline;gap:16px;margin-bottom:8px">
+    <h2 style="font-size:clamp(30px,4vw,44px)">{{ t.catsTitle }}</h2>
+    <a href="{% url 'shop' %}" style="font-family:var(--display);font-weight:700;font-size:18px;border-bottom:3px solid var(--yellow)">{{ t.seeAll }}</a>
+  </div>
+  <p class="hb-muted" style="font-size:17px;margin:0 0 30px">{{ t.catsSub }}</p>
+
+  <div class="hb-grid hb-grid--cats">
+    {% for cat in categories %}
+      <a class="hb-cat" href="{% url 'category' cat.slug %}" style="background:{{ cat.color }}">
+        <span class="hb-cat__glyph" aria-hidden="true">{{ cat.glyph }}</span>
+        <span>
+          <span class="hb-cat__name" style="display:block">{% label cat %}</span>
+          <span class="hb-cat__meta">{% if cat.product_count == 1 %}{{ t.oneToy }}{% else %}{{ cat.product_count }} {{ t.toys }}{% endif %}</span>
+        </span>
+      </a>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+<section class="hb-shell hb-section">
+  <div class="hb-panel" style="background:var(--pink);border-radius:44px;padding:40px;box-shadow:0 8px 0 var(--ink);position:relative;overflow:hidden;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:34px;align-items:center">
+    <span style="position:absolute;top:-30px;inset-inline-end:-20px;width:150px;height:150px;border-radius:999px;background:rgba(255,255,255,.25)"></span>
+    <div style="position:relative">
+      <span class="hb-badge" style="margin-bottom:14px">{{ t.promoBadge }}</span>
+      <h3 style="font-size:clamp(28px,4vw,42px);line-height:1.02;margin:0 0 14px;color:#fff;text-shadow:0 4px 0 var(--ink)">{{ t.promoTitle1 }}<br>{{ t.promoTitle2 }}</h3>
+      <p style="font-size:17px;font-weight:600;color:#4a1330;margin:0 0 22px;max-width:34ch">
+        {{ t.promoBody1 }} {% money promo_from %} {{ t.promoBody2 }} {% money promo_for %}. {{ t.promoBody3 }}
+      </p>
+      <a class="hb-btn hb-btn--dark" href="{% url 'search' %}">{{ t.promoCta }}</a>
+    </div>
+    <div style="position:relative;border:var(--line);border-radius:30px;overflow:hidden;background:#fff;height:260px;display:flex;align-items:center;justify-content:center;font-size:72px">🎁</div>
+  </div>
+</section>
+
+<section class="hb-shell hb-section">
+  <h2 style="font-size:clamp(30px,4vw,44px);margin-bottom:26px">{{ t.featTitle }}</h2>
+  {% if featured %}
+    <div class="hb-grid hb-grid--cards">
+      {% for p in featured %}{% include 'includes/product_card.html' with p=p media_height='190px' %}{% endfor %}
+    </div>
+  {% else %}
+    {% include 'includes/empty_shelf.html' %}
+  {% endif %}
+</section>
+
+<section class="hb-shell hb-section">
+  <div class="hb-trust">
+    <div><div class="hb-trust__t">{{ t.trust1t }}</div><div class="hb-trust__b">{{ t.trust1b }}</div></div>
+    <div><div class="hb-trust__t">{{ t.trust2t }}</div><div class="hb-trust__b">{{ t.trust2b }}</div></div>
+    <div><div class="hb-trust__t">{{ t.trust3t }}</div><div class="hb-trust__b">{{ t.trust3b }}</div></div>
+    <div><div class="hb-trust__t">{{ t.trust4t }}</div><div class="hb-trust__b">{{ t.trust4b }}</div></div>
+  </div>
+</section>
+
 {% endblock content %}

@@ -1,6 +1,12 @@
-<footer>
-    <div class="container">
-        <br>
-        <p>Copyright 2024. All Rights Reserved. Toy Store is Powered by Abdulaziz Mohammad.</p>
+<footer class="hb-footer">
+  <div class="hb-shell hb-footer__inner">
+    <div style="display:flex;align-items:center;gap:10px">
+      {% include 'includes/logo.html' %}
+      <div>
+        <div class="hb-display" style="font-size:20px">{{ t.brand }}</div>
+        <div class="hb-small hb-muted">{{ t.footerBuilt }}</div>
+      </div>
     </div>
+    <div class="hb-small hb-muted">&copy; 2026 {{ t.brand }}. {{ t.footerRights }}</div>
+  </div>
 </footer>

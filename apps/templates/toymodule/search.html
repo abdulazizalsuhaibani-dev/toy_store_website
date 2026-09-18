@@ -1,0 +1,114 @@
+{% extends "layouts/base.html" %}
+{% load happybox %}
+
+{% block title %}{{ t.search }}{% endblock %}
+
+{% block content %}
+
+<section style="background:var(--green);border-bottom:var(--line)">
+  <div class="hb-shell" style="padding:32px 24px 34px">
+    <h1 style="font-size:clamp(30px,4.5vw,48px);margin:0 0 18px;letter-spacing:-1px">{{ t.searchTitle }}</h1>
+
+    {% comment %}
+      GET, so a result page is a URL somebody can bookmark or share. The
+      hidden inputs carry the sidebar's filters through a new search.
+    {% endcomment %}
+    <form method="get" action="{% url 'search' %}" role="search">
+      <input type="hidden" name="age" value="{{ age }}">
+      <input type="hidden" name="cat" value="{{ cat }}">
+      <input type="hidden" name="price" value="{{ price }}">
+      <input type="hidden" name="sort" value="{{ sort }}">
+      <div style="display:flex;align-items:center;gap:12px;background:#fff;border:var(--line);border-radius:999px;padding:0 8px 0 20px;box-shadow:var(--drop);max-width:760px">
+        <svg viewBox="0 0 24 24" width="22" height="22" style="flex-shrink:0" fill="none" stroke="#2E2340"
+             stroke-width="3" stroke-linecap="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="7"/><path d="M16.5 16.5L21 21"/>
+        </svg>
+        <label class="hb-skip" for="hb-q">{{ t.search }}</label>
+        <input id="hb-q" type="search" name="q" value="{{ query }}" placeholder="{{ t.searchPh }}"
+               style="flex:1;border:0;background:transparent;font-family:var(--display);font-weight:700;font-size:21px;padding:16px 0;border-radius:0">
+        <button type="submit" class="hb-btn hb-btn--dark hb-btn--sm" style="margin:6px 0">{{ t.search }}</button>
+      </div>
+    </form>
+
+    <div class="hb-row" style="gap:9px;margin-top:16px">
+      <span class="hb-eyebrow" style="color:#1f5c48">{{ t.popular }}</span>
+      {% for s in suggestions %}
+        <a class="hb-pill hb-pill--sm" style="background:rgba(255,255,255,.75)"
+           href="{% querystring request q=s %}">{{ s }}</a>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+<div class="hb-shell hb-search-layout">
+
+  <aside class="hb-panel" style="display:grid;gap:20px">
+    <h2 style="font-size:24px">{{ t.narrow }}</h2>
+
+    <div>
+      <div class="hb-eyebrow" style="margin-bottom:10px">{{ t.ageLabel }}</div>
+      <div class="hb-row" style="gap:8px">
+        {% for band in age_bands %}
+          <a class="hb-pill hb-pill--sm {% if band.selected %}is-on{% endif %}"
+             href="{% querystring request age=band.key %}">{{ band.label }}</a>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div>
+      <div class="hb-eyebrow" style="margin-bottom:10px">{{ t.category }}</div>
+      <div style="display:grid;gap:8px">
+        <a href="{% querystring request cat='' %}" style="display:flex;align-items:center;gap:11px;font-size:16px;font-weight:700;color:var(--ink)">
+          <span style="width:24px;height:24px;border:var(--line);border-radius:999px;flex-shrink:0;background:{% if not cat %}var(--red){% else %}#fff{% endif %}"></span>
+          {{ t.all }}
+        </a>
+        {% for c in categories %}
+          <a href="{% querystring request cat=c.slug %}" style="display:flex;align-items:center;gap:11px;font-size:16px;font-weight:700;color:var(--ink)">
+            <span style="width:24px;height:24px;border:var(--line);border-radius:999px;flex-shrink:0;background:{% if cat == c.slug %}var(--red){% else %}#fff{% endif %}"></span>
+            {% label c %}
+          </a>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div>
+      <div class="hb-eyebrow" style="margin-bottom:10px">{{ t.price }}</div>
+      <div class="hb-row" style="gap:8px">
+        {% for band in price_bands %}
+          <a class="hb-pill hb-pill--sm {% if band.selected %}is-on{% endif %}"
+             href="{% querystring request price=band.key %}">{{ band.label }}</a>
+        {% endfor %}
+      </div>
+    </div>
+
+    <a href="{% url 'search' %}" style="font-size:15px;font-weight:700;border-bottom:2px solid var(--coral-soft);justify-self:start">{{ t.clearAll }}</a>
+  </aside>
+
+  <div>
+    <div class="hb-row" style="gap:14px;margin-bottom:18px">
+      <h2 style="font-size:26px">
+        {% if products|length == 1 %}{{ t.oneToy }}{% else %}{{ products|length }} {{ t.toys }}{% endif %}
+      </h2>
+      <div class="hb-row" style="margin-inline-start:auto;gap:8px">
+        {% for option in sort_options %}
+          <a class="hb-pill hb-pill--sm {% if option.selected %}is-on{% endif %}"
+             href="{% querystring request sort=option.key %}">{{ option.label }}</a>
+        {% endfor %}
+      </div>
+    </div>
+
+    {% if products %}
+      <div class="hb-grid" style="grid-template-columns:repeat(auto-fill,minmax(215px,1fr))">
+        {% for p in products %}{% include 'includes/product_card.html' with p=p media_height='170px' %}{% endfor %}
+      </div>
+    {% else %}
+      <div class="hb-panel hb-panel--dashed" style="text-align:center;padding:48px 28px">
+        <div class="hb-display" style="font-size:28px;margin-bottom:8px">{{ t.noMatchTitle }}</div>
+        <p class="hb-muted" style="font-size:16px;margin:0 0 20px">{{ t.noMatchBody }}</p>
+        <a class="hb-btn hb-btn--dark hb-btn--sm" href="{% url 'search' %}">{{ t.clearFilters }}</a>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock content %}

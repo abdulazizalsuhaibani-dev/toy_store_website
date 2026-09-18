@@ -1,0 +1,14 @@
+{% comment %}
+  Shown wherever a product grid would otherwise be nothing at all. A fresh
+  clone has an empty database, so this is the first thing a new developer
+  sees — it should say what to do, not just sit there.
+{% endcomment %}
+<div class="hb-panel hb-panel--dashed" style="text-align:center;padding:48px 28px">
+  <div class="hb-display" style="font-size:28px;margin-bottom:8px">{{ t.emptyShelf }}</div>
+  <p class="hb-muted" style="font-size:16px;margin:0 0 20px">{{ t.emptyShelfBody }}</p>
+  {% if user.is_authenticated %}
+    <a class="hb-btn hb-btn--dark hb-btn--sm" href="{% url 'addProduct' %}">{{ t.addProduct }}</a>
+  {% else %}
+    <a class="hb-btn hb-btn--dark hb-btn--sm" href="{% url 'login' %}">{{ t.signIn }}</a>
+  {% endif %}
+</div>

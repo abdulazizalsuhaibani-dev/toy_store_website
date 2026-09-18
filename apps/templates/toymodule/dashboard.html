@@ -1,12 +1,34 @@
 {% extends "layouts/base.html" %}
 
-{% block title %} Dashboard {% endblock %}
+{% block title %}{{ t.dashboard }}{% endblock %}
 
 {% block content %}
-<h2>Dashboard</h2>
-<br>
-<a href = '/dashboard/account-info'> Account Info </a>
-<br>
-<br>
-<a href = '/addProduct'> Add your products! </a>
+<div class="hb-shell" style="padding-top:44px">
+  <h1 style="font-size:clamp(32px,5vw,48px);margin-bottom:8px">{{ t.dashboard }}</h1>
+  <p class="hb-muted" style="margin:0 0 30px">{{ user.username }}</p>
+
+  <div class="hb-grid hb-grid--cats">
+    <a class="hb-cat" href="{% url 'addProduct' %}" style="background:var(--yellow)">
+      <span class="hb-cat__glyph" aria-hidden="true">🧸</span>
+      <span>
+        <span class="hb-cat__name" style="display:block">{{ t.addProduct }}</span>
+        <span class="hb-cat__meta">{{ t.addProductBody }}</span>
+      </span>
+    </a>
+    <a class="hb-cat" href="{% url 'orders' %}" style="background:var(--blue)">
+      <span class="hb-cat__glyph" aria-hidden="true">📦</span>
+      <span>
+        <span class="hb-cat__name" style="display:block">{{ t.yourOrders }}</span>
+        <span class="hb-cat__meta">{{ order_count }} {% if order_count == 1 %}{{ t.item }}{% else %}{{ t.items }}{% endif %}</span>
+      </span>
+    </a>
+    <a class="hb-cat" href="{% url 'account-info' %}" style="background:var(--pink)">
+      <span class="hb-cat__glyph" aria-hidden="true">👋</span>
+      <span>
+        <span class="hb-cat__name" style="display:block">{{ t.accountInfo }}</span>
+        <span class="hb-cat__meta">{{ t.accountInfoBody }}</span>
+      </span>
+    </a>
+  </div>
+</div>
 {% endblock content %}

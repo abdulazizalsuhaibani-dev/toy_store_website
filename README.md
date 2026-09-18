@@ -1,7 +1,13 @@
 # Toy Store
 
-A toy store web application built with Django 5 — a product catalogue browsable
-by category, user registration and login, and a dashboard for adding products.
+A toy store web application built with Django 5 — a bilingual (English/Arabic)
+product catalogue browsable by category, search with filters, a cart and
+checkout, user registration and login, and a dashboard for adding products.
+
+The storefront implements the **Happybox** design from Claude Design
+(project `56e1a170`): flat ink outlines, hard offset shadows, Baloo 2 display
+type, and a five-colour category palette. `static/css/happybox.css` is that
+design system; the page templates compose it.
 
 [![Django CI](https://github.com/abdulazizalsuhaibani-dev/toy_store_website/actions/workflows/django.yml/badge.svg)](https://github.com/abdulazizalsuhaibani-dev/toy_store_website/actions/workflows/django.yml)
 
@@ -12,11 +18,19 @@ by category, user registration and login, and a dashboard for adding products.
 
 ## Features
 
-- Product catalogue with per-category browsing — Baby Toys, Cars and Bikes,
-  Dolls and Playsets, Outdoors
-- Registration, login and logout on Django's built-in auth
-- Login-gated dashboard for adding products, with image upload
-- Bootstrap 5 styling through `django-crispy-forms`
+- Product catalogue with per-category browsing, driven by a `Category` model —
+  a new shelf is a row, not a new view
+- Product detail pages with age range, piece count, play type and ratings
+- Search with age, category and price filters, and three sort orders
+- Cart and checkout: quantities, gift wrap, three delivery options, and an
+  `Order` record. **No payment processor** — the card fields on the checkout
+  screen are inert and nothing is charged or stored
+- Bilingual English/Arabic with full RTL, toggled in the header
+- Seven-currency picker (the Gulf pegs plus USD), with prices stored once in a
+  base currency and converted for display
+- Registration, login and logout on Django's built-in auth; a signed-out cart
+  is adopted on sign-in
+- Login-gated dashboard for adding products and reviewing your own orders
 - Django admin at `/admin` for direct catalogue management
 
 ## Tech stack
@@ -25,7 +39,8 @@ by category, user registration and login, and a dashboard for adding products.
 |---|---|
 | Framework | Django 5.0 |
 | Database | SQLite locally, PostgreSQL in production |
-| Forms/UI | django-crispy-forms + crispy-bootstrap5, Bootstrap 5 (Bootswatch Cerulean) |
+| Forms | django-crispy-forms + crispy-bootstrap5 |
+| UI | `static/css/happybox.css` — hand-written; no CSS framework. It also styles the crispy `bootstrap5` class names, since the pack emits them and Bootstrap is no longer loaded |
 | Images | Pillow; local filesystem locally, S3-compatible object storage in production |
 | Serving | gunicorn + WhiteNoise |
 | Hosting | Render (web service) + Supabase (Postgres and Storage) |
@@ -44,9 +59,17 @@ uv pip install -r requirements.txt
 
 cp .env.example .env      # then fill in DJANGO_SECRET_KEY, keep DJANGO_DEBUG=True
 python manage.py migrate  # db.sqlite3 is not in the repo; this creates it
+python manage.py seed_catalog   # optional: the eight demo toys from the design
 python manage.py createsuperuser
 python manage.py runserver
 ```
+
+`migrate` also seeds the reference data the storefront cannot run without —
+categories, currencies and delivery options — because a shop with no currency
+cannot print a price and a checkout with no delivery option cannot be
+completed. Products are *not* seeded by `migrate`; `seed_catalog` is opt-in and
+matches on slug, so it never duplicates and never touches rows it did not
+create.
 
 Then open http://127.0.0.1:8000.
 
@@ -82,15 +105,40 @@ static/              static assets (collected to staticfiles/ at build time)
 media/               uploaded product images (local development)
 ```
 
-`Product` is the only model: `pname`, `pimage`, `pprice`, `pcategory`. There is
-no `Category` model — categories are plain strings on `Product`, and each
-category view filters on an exact match, so a new category means updating both
-the view and wherever the category is offered for selection.
+### Models
+
+| Model | What it holds |
+|---|---|
+| `Category` | A shelf: name (+ Arabic), slug, colour, glyph, blurb. Replaced the free-text `Product.pcategory` string. |
+| `Product` | `pname`/`pimage`/`pprice` keep their original names; plus Arabic name and blurb, age range, badge, pieces, play type, rating, review count, card colour, stock and featured flags. |
+| `Currency` | The design's seven currencies. `rate` is units per USD; exactly one row is `is_base`, and that is the currency `Product.pprice` is stored in (SAR). |
+| `DeliveryOption` | The checkout's three delivery speeds, with a free-over threshold. |
+| `Cart` / `CartItem` | A toy box in progress, keyed by session and adopted by the account on sign-in. |
+| `Order` / `OrderItem` | A placed order. Lines snapshot name and price, so a later rename or reprice cannot rewrite an old receipt. |
+
+Prices are stored once, in the base currency, and converted at render time —
+an order additionally records the currency code the shopper agreed the total
+in, so a receipt never silently re-prices itself.
+
+Migration `0016` adds the schema, `0017` backfills it and maps every existing
+`pcategory` string onto a `Category` row, and `0018` drops the old column. They
+are split because each step is only safe once the previous one has run.
+
+### Copy and localisation
+
+`apps/toymodule/strings.py` holds every UI string as an `(English, Arabic)`
+pair, flattened per request into `{{ t.someKey }}`. It is a dict rather than a
+gettext catalogue because the site is two languages chosen by a header toggle,
+not by `Accept-Language`. Model-side copy lives in `*_ar` columns. Swap both
+for gettext / django-parler the day a third language appears.
+
+The staff-facing pages (`/addProduct`, `/dashboard`) use the storefront chrome
+but their form labels stay English: the design covers the shop, not the admin.
 
 ## Development
 
 ```bash
-python manage.py test                    # test runner (no tests written yet)
+python manage.py test                    # 43 tests in apps/toymodule/tests.py
 python manage.py makemigrations          # after changing models.py
 python manage.py migrate
 
@@ -99,7 +147,16 @@ python manage.py migrate
 DJANGO_DEBUG=False DJANGO_ALLOWED_HOSTS=example.com \
   python manage.py check --deploy --fail-level WARNING
 python manage.py collectstatic --no-input
+
+python manage.py seed_catalog --reset    # replace the demo toys
 ```
+
+`TEST_RUNNER` is a small subclass in `toystorewebsite/test_runner.py`. It names
+the local apps explicitly, because `apps` is a namespace package and unittest
+stopped discovering those in Python 3.11 — a bare `manage.py test` would
+otherwise find zero tests and pass. It also swaps WhiteNoise's manifest static
+storage for the plain one during tests, since tests run before `collectstatic`
+has built a manifest.
 
 ## Deployment
 
