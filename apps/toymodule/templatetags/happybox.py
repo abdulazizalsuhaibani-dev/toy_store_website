@@ -85,6 +85,8 @@ def querystring(request, **overrides):
     The listing and search screens carry several independent filters at once;
     clicking one pill must keep the others. Passing a value of None or "" drops
     the key entirely, which is how the "All"/"Any" pills reset a single filter.
+    Changing any filter also drops `page` (page 3 of the old results means
+    nothing in the new ones); the pager itself passes `page=` explicitly.
     """
     params = request.GET.copy()
     for key, value in overrides.items():
@@ -92,6 +94,7 @@ def querystring(request, **overrides):
             params.pop(key, None)
         else:
             params[key] = value
-    params.pop("page", None)
+    if "page" not in overrides:
+        params.pop("page", None)
     encoded = params.urlencode()
     return f"?{encoded}" if encoded else ""

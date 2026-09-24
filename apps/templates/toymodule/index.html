@@ -62,21 +62,6 @@
 {% endif %}
 
 <section class="hb-shell hb-section">
-  <div class="hb-panel" style="background:var(--pink);border-radius:44px;padding:40px;box-shadow:0 8px 0 var(--ink);position:relative;overflow:hidden;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:34px;align-items:center">
-    <span style="position:absolute;top:-30px;inset-inline-end:-20px;width:150px;height:150px;border-radius:999px;background:rgba(255,255,255,.25)"></span>
-    <div style="position:relative">
-      <span class="hb-badge" style="margin-bottom:14px">{{ t.promoBadge }}</span>
-      <h3 style="font-size:clamp(28px,4vw,42px);line-height:1.02;margin:0 0 14px;color:#fff;text-shadow:0 4px 0 var(--ink)">{{ t.promoTitle1 }}<br>{{ t.promoTitle2 }}</h3>
-      <p style="font-size:17px;font-weight:600;color:#4a1330;margin:0 0 22px;max-width:34ch">
-        {{ t.promoBody1 }} {% money promo_from %} {{ t.promoBody2 }} {% money promo_for %}. {{ t.promoBody3 }}
-      </p>
-      <a class="hb-btn hb-btn--dark" href="{% url 'search' %}">{{ t.promoCta }}</a>
-    </div>
-    <div style="position:relative;border:var(--line);border-radius:30px;overflow:hidden;background:#fff;height:260px;display:flex;align-items:center;justify-content:center;font-size:72px">🎁</div>
-  </div>
-</section>
-
-<section class="hb-shell hb-section">
   <h2 style="font-size:clamp(30px,4vw,44px);margin-bottom:26px">{{ t.featTitle }}</h2>
   {% if featured %}
     <div class="hb-grid hb-grid--cards">

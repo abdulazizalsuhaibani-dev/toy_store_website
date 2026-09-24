@@ -66,7 +66,7 @@ def set_currency(request, code):
 def usd_to_base(request, usd):
     """A design figure quoted in USD, expressed in the base currency.
 
-    The design's price bands and promo are USD numbers. Deriving the
+    The design's price bands are USD numbers. Deriving the
     base-currency thresholds from the live rate keeps them agreeing with what
     `pprice` means if the shop owner moves `is_base` to another currency.
     """

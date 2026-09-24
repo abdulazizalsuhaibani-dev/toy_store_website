@@ -1,0 +1,25 @@
+{% load happybox %}
+{% comment %}
+  The pager for the listing and search screens. `page_obj` carries `elided`, a
+  short list of page numbers with "…" where a run is skipped. Hidden when there
+  is only one page.
+{% endcomment %}
+{% if page_obj.paginator.num_pages > 1 %}
+  <nav class="hb-row" style="justify-content:center;gap:8px;margin-top:34px" aria-label="{{ t.pagination }}">
+    {% if page_obj.has_previous %}
+      <a class="hb-pill hb-pill--sm" rel="prev" href="{% querystring request page=page_obj.previous_page_number %}">{% if is_rtl %}›{% else %}‹{% endif %} {{ t.pagePrev }}</a>
+    {% endif %}
+    {% for n in page_obj.elided %}
+      {% if n == page_obj.paginator.ELLIPSIS %}
+        <span class="hb-muted" aria-hidden="true">…</span>
+      {% else %}
+        <a class="hb-pill hb-pill--sm {% if n == page_obj.number %}is-on{% endif %}"
+           {% if n == page_obj.number %}aria-current="page"{% endif %}
+           href="{% querystring request page=n %}">{{ n }}</a>
+      {% endif %}
+    {% endfor %}
+    {% if page_obj.has_next %}
+      <a class="hb-pill hb-pill--sm" rel="next" href="{% querystring request page=page_obj.next_page_number %}">{{ t.pageNext }} {% if is_rtl %}‹{% else %}›{% endif %}</a>
+    {% endif %}
+  </nav>
+{% endif %}
