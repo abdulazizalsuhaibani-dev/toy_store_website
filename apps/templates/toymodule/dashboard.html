@@ -8,6 +8,7 @@
   <p class="hb-muted" style="margin:0 0 30px">{{ user.username }}</p>
 
   <div class="hb-grid hb-grid--cats">
+    {% if perms.toymodule.add_product %}
     <a class="hb-cat" href="{% url 'addProduct' %}" style="background:var(--yellow)">
       <span class="hb-cat__glyph" aria-hidden="true">🧸</span>
       <span>
@@ -15,6 +16,7 @@
         <span class="hb-cat__meta">{{ t.addProductBody }}</span>
       </span>
     </a>
+    {% endif %}
     <a class="hb-cat" href="{% url 'orders' %}" style="background:var(--blue)">
       <span class="hb-cat__glyph" aria-hidden="true">📦</span>
       <span>

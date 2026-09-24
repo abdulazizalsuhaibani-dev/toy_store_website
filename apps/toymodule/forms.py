@@ -1,10 +1,11 @@
 from django import forms
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Group, User
 from django.forms import ModelForm
 from django.forms.widgets import PasswordInput, TextInput
 
 from .models import DeliveryOption, Order, Product
+from .roles import CUSTOMER_GROUP
 
 
 class AddProductForm(ModelForm):
@@ -74,6 +75,14 @@ class AddUserForm(UserCreationForm):
     class Meta:
         model = User
         fields = ["username", "email", "password1", "password2"]
+
+    def save(self, commit=True):
+        """Every signup is a Customer. There is no self-service route to Admin."""
+        user = super().save(commit=commit)
+        if commit:
+            customers, _ = Group.objects.get_or_create(name=CUSTOMER_GROUP)
+            user.groups.add(customers)
+        return user
 
 
 class LoginForm(AuthenticationForm):

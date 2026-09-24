@@ -18,7 +18,7 @@
     <nav class="hb-nav" aria-label="Main">
       <a class="hb-nav__link" href="{% url 'index' %}">{{ t.navHome }}</a>
       <a class="hb-nav__link" href="{% url 'shop' %}">{{ t.navShop }}</a>
-      <a class="hb-nav__link" href="{% url 'shop' %}?age=3-6">{{ t.navAges }}</a>
+      <a class="hb-nav__link" href="{% url 'shop' %}?age=3-5">{{ t.navAges }}</a>
       <a class="hb-nav__link hb-nav__link--accent" href="{% url 'shop' %}?sort=price_desc">{{ t.navGifts }}</a>
 
       <form method="post" action="{% url 'set-language' %}" style="display:inline">

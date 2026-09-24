@@ -9,9 +9,12 @@ new template.
 
 import random
 from decimal import Decimal
+from functools import wraps
 
 from django.contrib.auth import login as auth_login, logout as auth_logout
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.views import redirect_to_login
+from django.core.exceptions import PermissionDenied
 from django.db import DatabaseError, connection, transaction
 from django.db.models import Count, Q
 from django.http import HttpResponse, HttpResponsePermanentRedirect, HttpResponseRedirect
@@ -25,11 +28,16 @@ from .forms import AddProductForm, AddUserForm, CheckoutForm, LoginForm
 from .models import CartItem, Category, DeliveryOption, Order, OrderItem, Product
 from .strings import translations
 
-# Age bands offered as filter pills. A product matches a band when its own
-# range fits inside it, so "3–6" never offers a toy rated 3–10 to a five year
-# old's parent. The design compared the range strings for equality, which does
-# the same thing for its own eight products and nothing sensible beyond them.
-AGE_BANDS = [("3-6", 3, 6), ("5-10", 5, 10), ("6-10", 6, 10)]
+# Age bands offered as filter pills: (key, label, lowest age, highest age). The
+# bands are contiguous and the last is open-ended, so every toy is reachable. A
+# product matches a band when its age range *overlaps* it: a toy for 3-10 is
+# right for a five year old, so it belongs under 3-5 as well as 6-8.
+AGE_BANDS = [
+    ("0-2", "0–2", 0, 2),
+    ("3-5", "3–5", 3, 5),
+    ("6-8", "6–8", 6, 8),
+    ("9-up", "9+", 9, None),
+]
 
 # Price bands as the design specified them, in USD. `_price_bands()` turns
 # them into base-currency thresholds, so they follow `Currency.is_base`.
@@ -61,6 +69,28 @@ SORTS = {
 # ---------------------------------------------------------------- helpers --
 
 
+def permission_required(perm):
+    """Gate a staff-facing view on a Django permission.
+
+    Anonymous visitors are sent to sign in, like @login_required. A signed-in
+    customer is authenticated but not allowed, so they get a 403 rather than a
+    redirect to a login page they have already passed.
+    """
+
+    def decorator(view):
+        @wraps(view)
+        def wrapper(request, *args, **kwargs):
+            if not request.user.is_authenticated:
+                return redirect_to_login(request.get_full_path(), reverse("login"))
+            if not request.user.has_perm(perm):
+                raise PermissionDenied
+            return view(request, *args, **kwargs)
+
+        return wrapper
+
+    return decorator
+
+
 def _catalogue(request, base=None):
     """Apply the query-string filters shared by the listing and search screens.
 
@@ -88,7 +118,10 @@ def _catalogue(request, base=None):
 
     band = next((b for b in AGE_BANDS if b[0] == age), None)
     if band:
-        products = products.filter(age_min__gte=band[1], age_max__lte=band[2])
+        _, _, band_low, band_high = band
+        products = products.filter(age_max__gte=band_low)
+        if band_high is not None:
+            products = products.filter(age_min__lte=band_high)
     else:
         age = ""
 
@@ -119,7 +152,7 @@ def _catalogue(request, base=None):
         "sort": sort,
         "age_bands": [
             {"key": "", "label": t["allAges"], "selected": not age},
-            *[{"key": key, "label": key.replace("-", "–"), "selected": age == key} for key, _, _ in AGE_BANDS],
+            *[{"key": key, "label": text, "selected": age == key} for key, text, _, _ in AGE_BANDS],
         ],
         "price_bands": [
             {"key": "", "label": t["any"], "selected": not price},
@@ -289,18 +322,27 @@ def search(request):
 # ------------------------------------------------------------------ cart --
 
 
+# The product page's own `max`, enforced here because the browser's is advice.
+# An unclamped value also overflows Postgres's 32-bit integer into a 500.
+MAX_QUANTITY = 99
+
+
+def _posted_int(request, key, default):
+    try:
+        return int(request.POST[key])
+    except (KeyError, TypeError, ValueError):
+        return default
+
+
 @require_POST
 def cart_add(request, pk):
     product = get_object_or_404(Product, pk=pk)
-    try:
-        quantity = max(1, int(request.POST.get("quantity", 1)))
-    except (TypeError, ValueError):
-        quantity = 1
+    quantity = min(MAX_QUANTITY, max(1, _posted_int(request, "quantity", 1)))
 
     cart = storefront.get_cart(request)
     item, created = CartItem.objects.get_or_create(cart=cart, product=product, defaults={"quantity": quantity})
     if not created:
-        item.quantity += quantity
+        item.quantity = min(MAX_QUANTITY, item.quantity + quantity)
         item.save(update_fields=["quantity"])
     cart.save(update_fields=["updated_at"])
 
@@ -316,21 +358,16 @@ def cart_update(request, pk):
     item = get_object_or_404(CartItem, pk=pk, cart=cart)
 
     if "delta" in request.POST:
-        try:
-            item.quantity += int(request.POST["delta"])
-        except (TypeError, ValueError):
-            pass
+        item.quantity += _posted_int(request, "delta", 0)
     elif "quantity" in request.POST:
-        try:
-            item.quantity = int(request.POST["quantity"])
-        except (TypeError, ValueError):
-            pass
+        item.quantity = _posted_int(request, "quantity", item.quantity)
     else:
         item.quantity = 0
 
     if item.quantity <= 0:
         item.delete()
     else:
+        item.quantity = min(item.quantity, MAX_QUANTITY)
         item.save(update_fields=["quantity"])
     cart.save(update_fields=["updated_at"])
     return redirect("cart")
@@ -523,7 +560,7 @@ def register_success(request):
     return render(request, "toymodule/registerSuccess.html")
 
 
-@login_required(login_url="login")
+@permission_required("toymodule.add_product")
 def addProduct(request):
     if request.method == "POST":
         form = AddProductForm(request.POST, request.FILES)
