@@ -16,6 +16,22 @@
     </form>
   </div>
 
+  <script>
+    {% comment %}Keeps the price label naming the currency being typed, so the number is never ambiguous.{% endcomment %}
+    (function () {
+      var select = document.getElementById("id_currency");
+      var label = document.querySelector("label[for=id_pprice]");
+      if (!select || !label) return;
+      var text = label.firstChild;
+      function sync() {
+        var code = select.options[select.selectedIndex].text.split(" ")[0];
+        text.textContent = "Price (" + code + ") ";
+      }
+      select.addEventListener("change", sync);
+      sync();
+    })();
+  </script>
+
   <p style="margin-top:20px"><a href="{% url 'dashboard' %}">{{ t.backTo }} {{ t.dashboard }}</a></p>
 </div>
 {% endblock content %}

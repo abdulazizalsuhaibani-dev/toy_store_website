@@ -17,7 +17,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import PermissionDenied
 from django.db import DatabaseError, connection, transaction
-from django.db.models import Count, Max, Q
+from django.db.models import Count, F, Max, Q
 from django.http import Http404, HttpResponse, HttpResponsePermanentRedirect, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -61,7 +61,9 @@ def _price_bands(request):
     }
 
 SORTS = {
-    "popular": ["-review_count", "pname"],
+    # Reviews do not exist yet, so review_count alone would rank by whatever
+    # was typed into it. Featured toys lead; review_count breaks ties.
+    "popular": ["-is_featured", "-review_count", "pname"],
     "price_asc": ["pprice", "pname"],
     "price_desc": ["-pprice", "pname"],
 }
@@ -323,11 +325,6 @@ def search(request):
 # ------------------------------------------------------------------ cart --
 
 
-# The product page's own `max`, enforced here because the browser's is advice.
-# An unclamped value also overflows Postgres's 32-bit integer into a 500.
-MAX_QUANTITY = 99
-
-
 def _posted_int(request, key, default):
     try:
         return int(request.POST[key])
@@ -338,12 +335,22 @@ def _posted_int(request, key, default):
 @require_POST
 def cart_add(request, pk):
     product = get_object_or_404(Product, pk=pk)
-    quantity = min(MAX_QUANTITY, max(1, _posted_int(request, "quantity", 1)))
+    wanted = max(1, _posted_int(request, "quantity", 1))
+
+    if not product.in_stock:
+        messages.error(request, _t(request)["soldOut"].format(name=product.pname))
+        return redirect("cart") if request.POST.get("next") == "cart" else _back(request)
 
     cart = storefront.get_cart(request)
-    item, created = CartItem.objects.get_or_create(cart=cart, product=product, defaults={"quantity": quantity})
-    if not created:
-        item.quantity = min(MAX_QUANTITY, item.quantity + quantity)
+    item = CartItem.objects.filter(cart=cart, product=product).first()
+    have = item.quantity if item else 0
+    if have + wanted > product.quantity:
+        messages.info(request, _t(request)["onlyLeftAdded"].format(name=product.pname, n=product.quantity))
+    quantity = min(have + wanted, product.max_orderable)
+    if item is None:
+        CartItem.objects.create(cart=cart, product=product, quantity=quantity)
+    elif quantity != item.quantity:
+        item.quantity = quantity
         item.save(update_fields=["quantity"])
     cart.save(update_fields=["updated_at"])
 
@@ -365,10 +372,15 @@ def cart_update(request, pk):
     else:
         item.quantity = 0
 
+    product = item.product
+    if item.quantity > product.quantity:
+        text = _t(request)["soldOut" if not product.in_stock else "onlyLeftKept"]
+        messages.info(request, text.format(name=product.pname, n=product.quantity))
+    item.quantity = min(item.quantity, product.max_orderable)
+
     if item.quantity <= 0:
         item.delete()
     else:
-        item.quantity = min(item.quantity, MAX_QUANTITY)
         item.save(update_fields=["quantity"])
     cart.save(update_fields=["updated_at"])
     return redirect("cart")
@@ -382,9 +394,23 @@ def cart_gift(request):
     return _back(request, "cart")
 
 
+def _stock_problem(request, product):
+    """Send the shopper back to the cart, saying which toy ran short.
+
+    Nothing was charged and no order exists: the decrement happens inside the
+    same transaction as the order, so a failure here rolls all of it back.
+    """
+    product.refresh_from_db(fields=["quantity"])
+    text = _t(request)["soldOutCheckout" if not product.in_stock else "onlyLeftCheckout"]
+    messages.error(request, text.format(name=product.pname, n=product.quantity))
+    return redirect("cart")
+
+
 def cart(request):
     basket = storefront.get_cart(request, create=False)
     items = list(basket.items.select_related("product")) if basket else []
+    for item in items:
+        item.over_stock = item.quantity > item.product.quantity
     subtotal = sum((item.line_total for item in items), Decimal("0"))
     standard = DeliveryOption.objects.first()
     shipping = standard.cost_for(subtotal) if standard else Decimal("0")
@@ -405,11 +431,21 @@ def cart(request):
 # -------------------------------------------------------------- checkout --
 
 
+class OutOfStock(Exception):
+    """Raised inside the checkout transaction when a line can no longer be filled."""
+
+    def __init__(self, product):
+        self.product = product
+
+
 def checkout(request):
     basket = storefront.get_cart(request, create=False)
     items = list(basket.items.select_related("product")) if basket else []
     if not items:
         return redirect("cart")
+    short = next((item for item in items if item.quantity > item.product.quantity), None)
+    if short is not None:
+        return _stock_problem(request, short.product)
 
     subtotal = sum((item.line_total for item in items), Decimal("0"))
     options = list(DeliveryOption.objects.all())
@@ -433,21 +469,34 @@ def checkout(request):
             # One transaction: an order that exists without its lines, or a
             # cart emptied against an order that failed to save, is worse than
             # a 500 the shopper can retry.
-            with transaction.atomic():
-                order.save()
-                OrderItem.objects.bulk_create(
-                    [
-                        OrderItem(
-                            order=order,
-                            product=item.product,
-                            product_name=item.product.pname,
-                            unit_price=item.product.pprice,
-                            quantity=item.quantity,
-                        )
-                        for item in items
-                    ]
-                )
-                basket.items.all().delete()
+            try:
+                with transaction.atomic():
+                    # Take the stock first. The conditional UPDATE is the whole
+                    # check: it only matches while enough is left, so two
+                    # checkouts of the last toy cannot both win however the
+                    # cart page looked when each shopper opened it.
+                    for item in items:
+                        taken = Product.objects.filter(
+                            pk=item.product_id, quantity__gte=item.quantity
+                        ).update(quantity=F("quantity") - item.quantity)
+                        if not taken:
+                            raise OutOfStock(item.product)
+                    order.save()
+                    OrderItem.objects.bulk_create(
+                        [
+                            OrderItem(
+                                order=order,
+                                product=item.product,
+                                product_name=item.product.pname,
+                                unit_price=item.product.pprice,
+                                quantity=item.quantity,
+                            )
+                            for item in items
+                        ]
+                    )
+                    basket.items.all().delete()
+            except OutOfStock as short:
+                return _stock_problem(request, short.product)
 
             # Lets the confirmation page recognise the shopper who just placed
             # this order, including when they checked out signed out.

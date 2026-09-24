@@ -90,6 +90,26 @@ STRINGS = {
     "reviewsSuffix": ("parent reviews", "تقييم من الأهل"),
     "inStock": ("In stock · ships tomorrow", "متوفر · يُشحن غدًا"),
     "outOfStock": ("Out of stock", "غير متوفر"),
+    "only": ("Only", "فقط"),
+    "left": ("left", "متبقٍ"),
+    "noReviews": ("No reviews yet", "لا توجد مراجعات بعد"),
+    "soldOut": ("“{name}” is sold out.", "«{name}» نفدت من المخزون."),
+    "onlyLeftAdded": (
+        "Only {n} of “{name}” left, so that's all we could add.",
+        "لم يتبقَّ من «{name}» سوى {n}، وهذا كل ما أمكن إضافته.",
+    ),
+    "onlyLeftKept": (
+        "Only {n} of “{name}” left, so we lowered your quantity.",
+        "لم يتبقَّ من «{name}» سوى {n}، لذا خفّضنا الكمية.",
+    ),
+    "soldOutCheckout": (
+        "“{name}” just sold out. Nothing was charged; remove it to continue.",
+        "نفدت «{name}» للتو. لم يُخصم أي مبلغ؛ أزلها للمتابعة.",
+    ),
+    "onlyLeftCheckout": (
+        "Only {n} of “{name}” left. Nothing was charged; lower the quantity to continue.",
+        "لم يتبقَّ من «{name}» سوى {n}. لم يُخصم أي مبلغ؛ خفّض الكمية للمتابعة.",
+    ),
     "ageRange": ("Age range", "الفئة العمرية"),
     "years": ("years", "سنة"),
     "pieces": ("Pieces", "القطع"),
