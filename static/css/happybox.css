@@ -273,38 +273,77 @@ img { max-width: 100%; }
 .hb-brand { display: flex; align-items: center; gap: 10px; flex-shrink: 0; color: var(--ink); }
 .hb-brand:hover { color: var(--ink); }
 .hb-brand__name { font-family: var(--display); font-weight: 800; font-size: 26px; line-height: 1; letter-spacing: -0.5px; }
-.hb-brand__tag { font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted-2); }
+.hb-brand__tag { display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted-2); }
 
-/* The nav takes the slack and wraps its own items when the row gets tight, so
-   the cart keeps its place beside the brand instead of being pushed onto a
-   line of its own. */
-.hb-nav {
-  display: flex;
+/* Regions: brand / menu / cart. The menu (.hb-menu, a <details>) holds the
+   primary nav, the utility controls and the account links. On desktop it is
+   flattened into the bar and its toggle hidden; below 1220px (a signed-in
+   English row measures ~1200px) it collapses behind the toggle into a
+   dropdown panel. No JS either way. */
+.hb-menu {
   /* flex-basis 0, not auto: a wrapping flex container breaks lines on each
-     item's content size before any shrinking happens, so a nav measured at its
+     item's content size before any shrinking happens, so a menu measured at its
      full width shoves the cart onto a line of its own. At 0 it never forces
      the break, then grows into whatever is left and wraps its own items. */
   flex: 1 1 0;
   min-width: 0;
-  gap: 6px;
-  margin-inline-start: auto;
+}
+.hb-menu__toggle { list-style: none; }
+.hb-menu__toggle::-webkit-details-marker { display: none; }
+.hb-menu[open] > .hb-menu__toggle { background: var(--ink); color: var(--cream); }
+.hb-menu__panel {
+  display: flex;
   align-items: center;
   justify-content: flex-end;
   flex-wrap: wrap;
+  gap: 10px 14px;
+}
+/* Flattening a closed <details> needs ::details-content (2025-era browsers).
+   Where it is missing, the toggle simply stays visible on desktop too. */
+@supports selector(::details-content) {
+  @media (min-width: 1221px) {
+    .hb-menu__toggle { display: none; }
+    .hb-menu::details-content { content-visibility: visible; }
+  }
+}
+.hb-nav { display: flex; align-items: center; gap: 6px; }
+.hb-nav, .hb-utility { margin-inline-end: auto; }
+.hb-nav + .hb-utility { margin-inline-end: 0; }
+.hb-utility { display: flex; align-items: center; gap: 8px; }
+.hb-account {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-inline-start: 14px;
+  border-inline-start: var(--line);
 }
 .hb-header__bar > .hb-cart-link { margin-inline-start: 8px; flex-shrink: 0; }
+/* Just above the collapse point a signed-in, Arabic bar runs ~30px short.
+   The "Prices in" label goes first: the select still shows the currency code,
+   and the label stays in the accessibility tree. */
+@media (min-width: 1221px) and (max-width: 1360px) {
+  .hb-utility .hb-picker { padding-inline-start: 8px; }
+  .hb-utility .hb-picker label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
 .hb-nav__link {
   font-family: var(--display);
   font-weight: 700;
   font-size: 17px;
-  padding: 9px 16px;
+  padding: 9px 12px;
   border-radius: 999px;
   color: var(--ink);
 }
 .hb-nav__link:hover { background: var(--yellow-soft); color: var(--ink); }
 .hb-nav__link.is-here { background: var(--yellow-soft); }
-.hb-nav__link--accent { color: var(--red-link); }
-.hb-nav__link--accent:hover { background: var(--pink-soft); color: var(--red-link); }
+.hb-nav__link--button { background: none; border: 0; line-height: inherit; cursor: pointer; }
+.hb-pill--lang, .hb-pill--lang:hover { background: var(--lilac); }
 
 .hb-cart-link {
   position: relative;
@@ -360,6 +399,7 @@ img { max-width: 100%; }
 
 .hb-subnav { border-top: var(--line); background: var(--lilac); }
 .hb-subnav__row { display: flex; align-items: center; gap: 8px; overflow-x: auto; padding: 9px 24px; }
+.hb-subnav__row > * { flex-shrink: 0; }
 
 /* --------------------------------------------------------------- hero -- */
 
@@ -795,28 +835,60 @@ input[type="color"] { padding: 4px; height: 48px; cursor: pointer; }
 [dir="rtl"] .hb-badge { transform: rotate(8deg); }
 [dir="rtl"] .hb-cat:hover { transform: translateY(3px) rotate(1deg); }
 
+/* ---------------------------------------------------- collapsed header -- */
+
+@media (max-width: 1220px) {
+  /* One row: brand, then the menu toggle and the cart. The menu opens as a
+     panel hanging below the bar, so the sticky header stays one row tall. */
+  .hb-header__bar { position: relative; gap: 10px; flex-wrap: nowrap; }
+  .hb-brand { flex-shrink: 1; min-width: 0; margin-inline-end: auto; }
+  .hb-menu { flex: 0 0 auto; }
+  .hb-menu__toggle { padding: 9px 14px; font-size: 15px; }
+  .hb-menu__panel {
+    position: absolute;
+    top: calc(100% - 4px);
+    inset-inline-end: 24px;
+    width: 380px;
+    z-index: 1;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+    padding: 16px;
+    background: var(--cream);
+    border: var(--line);
+    border-radius: 22px;
+    box-shadow: var(--drop);
+  }
+  .hb-nav, .hb-utility { margin-inline-end: 0; flex-wrap: wrap; }
+  .hb-account { padding-inline-start: 0; padding-top: 12px; border-inline-start: 0; border-top: var(--line); }
+}
+@media (max-width: 720px) {
+  .hb-menu__panel { inset-inline: 16px; width: auto; }
+  /* Brand, toggle and cart share 343px on a phone: the toggle goes icon-only,
+     keeping its word for screen readers. */
+  .hb-menu__toggle { padding: 9px 12px; }
+  .hb-menu__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .hb-brand__name { white-space: nowrap; }
+}
+@media (max-width: 420px) {
+  .hb-brand__tag { display: none; }
+  .hb-brand { gap: 8px; }
+  .hb-brand svg { width: 38px; height: 38px; }
+  .hb-brand__name { font-size: 22px; }
+}
+
 /* ------------------------------------------------------------- mobile -- */
 
 @media (max-width: 720px) {
   .hb-shell { padding: 0 16px; }
-  .hb-header__bar { gap: 10px; }
-  /* One scrollable row rather than three wrapped ones: the header is sticky,
-     and three rows of it leaves almost no page on a phone. */
-  .hb-nav {
-    gap: 6px;
-    width: 100%;
-    margin-inline-start: 0;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    scrollbar-width: none;
-    padding-bottom: 2px;
-  }
-  .hb-nav::-webkit-scrollbar { display: none; }
-  .hb-nav > * { flex-shrink: 0; }
   .hb-nav__link { font-size: 15px; padding: 7px 12px; }
-  /* Brand and cart share the first row; the nav scrolls along the second. */
-  .hb-header__bar { display: grid; grid-template-columns: 1fr auto; align-items: center; }
-  .hb-nav { grid-column: 1 / -1; order: 2; }
   .hb-cart-link { margin-inline-start: 0; padding: 9px 16px; font-size: 15px; }
   .hb-hero__inner { padding: 36px 16px 76px; }
   .hb-section { padding-top: 40px; }
