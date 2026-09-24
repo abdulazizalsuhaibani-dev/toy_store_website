@@ -48,6 +48,12 @@ def label(context, obj):
 
 
 @register.simple_tag(takes_context=True)
+def status_label(context, order):
+    """An order's status in the current language."""
+    return context["t"].get(f"status_{order.status}", order.get_status_display())
+
+
+@register.simple_tag(takes_context=True)
 def blurb(context, obj):
     return obj.blurb_for(context.get("lang", "en")) if obj is not None else ""
 

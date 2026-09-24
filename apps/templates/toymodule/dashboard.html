@@ -17,6 +17,24 @@
       </span>
     </a>
     {% endif %}
+    {% if perms.toymodule.view_category %}
+    <a class="hb-cat" href="{% url 'category-list' %}" style="background:var(--green)">
+      <span class="hb-cat__glyph" aria-hidden="true">🗂️</span>
+      <span>
+        <span class="hb-cat__name" style="display:block">{{ t.manageCategories }}</span>
+        <span class="hb-cat__meta">{{ t.manageCategoriesBody }}</span>
+      </span>
+    </a>
+    {% endif %}
+    {% if perms.toymodule.view_order %}
+    <a class="hb-cat" href="{% url 'manage-orders' %}" style="background:var(--lilac)">
+      <span class="hb-cat__glyph" aria-hidden="true">🚚</span>
+      <span>
+        <span class="hb-cat__name" style="display:block">{{ t.manageOrders }}</span>
+        <span class="hb-cat__meta">{{ t.manageOrdersBody }}</span>
+      </span>
+    </a>
+    {% endif %}
     <a class="hb-cat" href="{% url 'orders' %}" style="background:var(--blue)">
       <span class="hb-cat__glyph" aria-hidden="true">📦</span>
       <span>

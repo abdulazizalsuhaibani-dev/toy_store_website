@@ -11,20 +11,21 @@ import random
 from decimal import Decimal
 from functools import wraps
 
+from django.contrib import messages
 from django.contrib.auth import login as auth_login, logout as auth_logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import PermissionDenied
 from django.db import DatabaseError, connection, transaction
-from django.db.models import Count, Q
-from django.http import HttpResponse, HttpResponsePermanentRedirect, HttpResponseRedirect
+from django.db.models import Count, Max, Q
+from django.http import Http404, HttpResponse, HttpResponsePermanentRedirect, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from . import storefront
-from .forms import AddProductForm, AddUserForm, CheckoutForm, LoginForm
+from .forms import AddProductForm, AddUserForm, CategoryForm, CheckoutForm, LoginForm, OrderStatusForm
 from .models import CartItem, Category, DeliveryOption, Order, OrderItem, Product
 from .strings import translations
 
@@ -597,6 +598,112 @@ def orders(request):
         "toymodule/orders.html",
         {"orders": Order.objects.filter(user=request.user).prefetch_related("items")},
     )
+
+
+# ------------------------------------------------------ staff: categories --
+
+
+def _t(request):
+    return translations(storefront.get_language(request))
+
+
+@permission_required("toymodule.view_category")
+def category_list(request):
+    return render(
+        request,
+        "toymodule/category_list.html",
+        {"categories": Category.objects.annotate(product_count=Count("products")).order_by("sort_order", "name")},
+    )
+
+
+def _category_form(request, category):
+    form = CategoryForm(request.POST or None, instance=category)
+    if request.method == "POST" and form.is_valid():
+        saved = form.save(commit=False)
+        saved.slug = form.cleaned_data["slug"]
+        if saved.pk is None:
+            saved.sort_order = (Category.objects.aggregate(top=Max("sort_order"))["top"] or 0) + 1
+        saved.save()
+        messages.success(request, _t(request)["categorySaved"])
+        return redirect("category-list")
+    return render(request, "toymodule/category_form.html", {"form": form, "category": category})
+
+
+@permission_required("toymodule.add_category")
+def category_create(request):
+    return _category_form(request, None)
+
+
+@permission_required("toymodule.change_category")
+def category_edit(request, pk):
+    return _category_form(request, get_object_or_404(Category, pk=pk))
+
+
+@require_POST
+@permission_required("toymodule.delete_category")
+def category_delete(request, pk):
+    category = get_object_or_404(Category, pk=pk)
+    # Product.category is PROTECT: say so, rather than let the delete 500.
+    if category.products.exists():
+        messages.error(request, _t(request)["categoryInUse"].format(name=category.name))
+    else:
+        category.delete()
+        messages.success(request, _t(request)["categoryDeleted"])
+    return redirect("category-list")
+
+
+@require_POST
+@permission_required("toymodule.change_category")
+def category_move(request, pk):
+    """Swap a category with its neighbour.
+
+    Renumbers the whole list first: seeded rows can share a sort_order, and
+    swapping two equal numbers would move nothing.
+    """
+    ordered = list(Category.objects.all())
+    index = next((i for i, c in enumerate(ordered) if c.pk == pk), None)
+    if index is None:
+        raise Http404
+    target = index - 1 if request.POST.get("direction") == "up" else index + 1
+    if 0 <= target < len(ordered):
+        ordered[index], ordered[target] = ordered[target], ordered[index]
+    for position, category in enumerate(ordered):
+        if category.sort_order != position:
+            Category.objects.filter(pk=category.pk).update(sort_order=position)
+    return redirect("category-list")
+
+
+# ---------------------------------------------------------- staff: orders --
+
+
+@permission_required("toymodule.view_order")
+def manage_orders(request):
+    status = request.GET.get("status", "")
+    orders = Order.objects.select_related("user")
+    if status in Order.Status.values:
+        orders = orders.filter(status=status)
+    else:
+        status = ""
+    return render(
+        request,
+        "toymodule/manage_orders.html",
+        {"orders": orders.order_by("-created_at", "-pk"), "status": status, "statuses": [(v, _t(request)[f"status_{v}"]) for v in Order.Status.values]},
+    )
+
+
+@permission_required("toymodule.view_order")
+def manage_order(request, reference):
+    order = get_object_or_404(Order.objects.select_related("user", "delivery_option").prefetch_related("items"), reference=reference)
+    form = OrderStatusForm(instance=order)
+    if request.method == "POST":
+        if not request.user.has_perm("toymodule.change_order"):
+            raise PermissionDenied
+        form = OrderStatusForm(request.POST, instance=order)
+        if form.is_valid():
+            form.save()
+            messages.success(request, _t(request)["statusSaved"])
+            return redirect("manage-order", reference=order.reference)
+    return render(request, "toymodule/manage_order.html", {"order": order, "form": form})
 
 
 # ------------------------------------------------------- legacy redirects --

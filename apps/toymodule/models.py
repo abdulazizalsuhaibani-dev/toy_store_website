@@ -310,6 +310,14 @@ class Order(models.Model):
 
     PAYMENT_AR = {Payment.CARD: "بطاقة", Payment.APPLE_PAY: "Apple Pay", Payment.ON_DELIVERY: "الدفع عند الاستلام"}
 
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        CONFIRMED = "confirmed", "Confirmed"
+        PACKED = "packed", "Packed"
+        SHIPPED = "shipped", "Shipped"
+        DELIVERED = "delivered", "Delivered"
+        CANCELLED = "cancelled", "Cancelled"
+
     reference = models.CharField(max_length=12, unique=True)
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="orders")
 
@@ -330,6 +338,10 @@ class Order(models.Model):
     # What the shopper was looking at when they placed it.
     currency_code = models.CharField(max_length=3, default="SAR")
     language = models.CharField(max_length=2, default="en")
+
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING, db_index=True)
+    # When `status` last changed; null while the order is still as placed.
+    status_changed_at = models.DateTimeField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
 

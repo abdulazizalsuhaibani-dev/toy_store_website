@@ -524,3 +524,196 @@ class ReverseSeedMigrationTests(TransactionTestCase):
             executor.migrate([("toymodule", "0016_storefront_schema")])  # would raise ProtectedError
         finally:
             call_command("migrate", "toymodule", verbosity=0)
+
+
+class StaffTestCase(TestCase):
+    def setUp(self):
+        self.customer = User.objects.create_user("parent", password="not-a-real-password-123")
+        self.customer.groups.add(Group.objects.get(name="Customer"))
+        self.admin = User.objects.create_user("owner", password="not-a-real-password-123")
+        self.admin.groups.add(Group.objects.get(name="Admin"))
+
+
+class CategoryManagementTests(StaffTestCase):
+    def data(self, **extra):
+        data = {"name": "Puzzles", "name_ar": "ألغاز", "slug": "", "blurb": "", "blurb_ar": "", "glyph": "🧩", "color": "#FFC93C"}
+        data.update(extra)
+        return data
+
+    def test_only_admins_reach_the_screens(self):
+        pk = Category.objects.first().pk
+        urls = [reverse("category-list"), reverse("category-create"), reverse("category-edit", args=[pk])]
+        for url in urls:
+            self.assertEqual(self.client.get(url).status_code, 302, url)
+        self.client.force_login(self.customer)
+        for url in urls:
+            self.assertEqual(self.client.get(url).status_code, 403, url)
+        self.client.force_login(self.admin)
+        for url in urls:
+            self.assertEqual(self.client.get(url).status_code, 200, url)
+
+    def test_list_shows_product_counts(self):
+        baby = Category.objects.get(name="Baby Toys")
+        Product.objects.create(pname="Stacky", pprice=Decimal("40"), category=baby)
+        self.client.force_login(self.admin)
+        cats = self.client.get(reverse("category-list")).context["categories"]
+        self.assertEqual({c.name: c.product_count for c in cats}["Baby Toys"], 1)
+
+    def test_create_derives_the_slug_and_goes_last(self):
+        self.client.force_login(self.admin)
+        self.client.post(reverse("category-create"), self.data())
+        created = Category.objects.get(name="Puzzles")
+        self.assertEqual(created.slug, "puzzles")
+        self.assertEqual(list(Category.objects.all())[-1], created)
+
+    def test_colliding_slug_is_a_form_error_not_a_500(self):
+        self.client.force_login(self.admin)
+        response = self.client.post(reverse("category-create"), self.data(name="Other Outdoors", slug="outdoors"))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("slug", response.context["form"].errors)
+
+    def test_bad_colour_is_rejected(self):
+        self.client.force_login(self.admin)
+        response = self.client.post(reverse("category-create"), self.data(color="red"))
+        self.assertIn("color", response.context["form"].errors)
+        self.assertFalse(Category.objects.filter(name="Puzzles").exists())
+
+    def test_editing_keeps_the_url(self):
+        outdoors = Category.objects.get(name="Outdoors")
+        self.client.force_login(self.admin)
+        self.client.post(reverse("category-edit", args=[outdoors.pk]), self.data(name="Great Outdoors", slug=outdoors.slug))
+        outdoors.refresh_from_db()
+        self.assertEqual((outdoors.name, outdoors.slug), ("Great Outdoors", "outdoors"))
+
+    def test_a_category_with_toys_cannot_be_deleted(self):
+        baby = Category.objects.get(name="Baby Toys")
+        Product.objects.create(pname="Stacky", pprice=Decimal("40"), category=baby)
+        self.client.force_login(self.admin)
+        response = self.client.post(reverse("category-delete", args=[baby.pk]), follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(Category.objects.filter(pk=baby.pk).exists())
+        self.assertContains(response, "still has toys")
+
+    def test_an_empty_category_can_be_deleted(self):
+        empty = Category.objects.create(name="Empty", slug="empty")
+        self.client.force_login(self.admin)
+        self.client.post(reverse("category-delete", args=[empty.pk]))
+        self.assertFalse(Category.objects.filter(pk=empty.pk).exists())
+
+    def test_customers_cannot_change_categories(self):
+        target = Category.objects.get(name="Outdoors")
+        self.client.force_login(self.customer)
+        self.assertEqual(self.client.post(reverse("category-delete", args=[target.pk])).status_code, 403)
+        self.assertEqual(self.client.post(reverse("category-move", args=[target.pk]), {"direction": "up"}).status_code, 403)
+        self.assertTrue(Category.objects.filter(pk=target.pk).exists())
+
+    def test_delete_and_move_refuse_get(self):
+        pk = Category.objects.first().pk
+        self.client.force_login(self.admin)
+        self.assertEqual(self.client.get(reverse("category-delete", args=[pk])).status_code, 405)
+        self.assertEqual(self.client.get(reverse("category-move", args=[pk])).status_code, 405)
+
+    def test_move_swaps_with_the_neighbour_even_when_sort_orders_tie(self):
+        Category.objects.update(sort_order=0)
+        names = [c.name for c in Category.objects.all()]
+        second = Category.objects.get(name=names[1])
+        self.client.force_login(self.admin)
+        self.client.post(reverse("category-move", args=[second.pk]), {"direction": "up"})
+        after = [c.name for c in Category.objects.all()]
+        self.assertEqual(after[:2], [names[1], names[0]])
+        self.assertEqual(after[2:], names[2:])
+
+    def test_moving_the_first_up_changes_nothing(self):
+        names = [c.name for c in Category.objects.all()]
+        self.client.force_login(self.admin)
+        self.client.post(reverse("category-move", args=[Category.objects.first().pk]), {"direction": "up"})
+        self.assertEqual([c.name for c in Category.objects.all()], names)
+
+
+class OrderManagementTests(StaffTestCase):
+    def make_order(self, reference="HB-AAAAAA", **extra):
+        fields = dict(
+            reference=reference, full_name="Sam Rivera", phone="050", street="18 Marbles Lane", city="Riyadh",
+            subtotal=Decimal("75"), total=Decimal("75"), currency_code="USD", user=self.customer,
+        )
+        fields.update(extra)
+        return Order.objects.create(**fields)
+
+    def test_new_orders_start_pending(self):
+        self.assertEqual(self.make_order().status, Order.Status.PENDING)
+
+    def test_only_admins_reach_order_management(self):
+        order = self.make_order()
+        urls = [reverse("manage-orders"), reverse("manage-order", args=[order.reference])]
+        for url in urls:
+            self.assertEqual(self.client.get(url).status_code, 302, url)
+        self.client.force_login(self.customer)
+        for url in urls:
+            self.assertEqual(self.client.get(url).status_code, 403, url)
+        self.client.force_login(self.admin)
+        for url in urls:
+            self.assertEqual(self.client.get(url).status_code, 200, url)
+
+    def test_list_filters_by_status_newest_first(self):
+        old = self.make_order("HB-OLDOLD", status=Order.Status.SHIPPED)
+        new = self.make_order("HB-NEWNEW")
+        self.client.force_login(self.admin)
+        everything = self.client.get(reverse("manage-orders")).context["orders"]
+        self.assertEqual([o.pk for o in everything], [new.pk, old.pk])
+        shipped = self.client.get(reverse("manage-orders"), {"status": "shipped"}).context["orders"]
+        self.assertEqual([o.pk for o in shipped], [old.pk])
+        junk = self.client.get(reverse("manage-orders"), {"status": "nonsense"}).context["orders"]
+        self.assertEqual(len(junk), 2)
+
+    def test_detail_shows_the_total_in_the_recorded_currency(self):
+        order = self.make_order()
+        self.client.force_login(self.admin)
+        self.assertContains(self.client.get(reverse("manage-order", args=[order.reference])), "USD 20")
+
+    def test_admin_changes_status_and_it_is_timestamped(self):
+        order = self.make_order()
+        self.assertIsNone(order.status_changed_at)
+        self.client.force_login(self.admin)
+        self.client.post(reverse("manage-order", args=[order.reference]), {"status": "packed"})
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.Status.PACKED)
+        self.assertIsNotNone(order.status_changed_at)
+
+    def test_resaving_the_same_status_does_not_move_the_timestamp(self):
+        order = self.make_order()
+        self.client.force_login(self.admin)
+        self.client.post(reverse("manage-order", args=[order.reference]), {"status": "pending"})
+        order.refresh_from_db()
+        self.assertIsNone(order.status_changed_at)
+
+    def test_customer_cannot_change_status(self):
+        order = self.make_order()
+        self.client.force_login(self.customer)
+        self.assertEqual(self.client.post(reverse("manage-order", args=[order.reference]), {"status": "delivered"}).status_code, 403)
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.Status.PENDING)
+
+    def test_owner_sees_their_status_and_a_stranger_does_not(self):
+        order = self.make_order(status=Order.Status.SHIPPED)
+        self.client.force_login(self.customer)
+        self.assertContains(self.client.get(reverse("order-placed", args=[order.reference])), "Shipped")
+        self.assertContains(self.client.get(reverse("orders")), "Shipped")
+        stranger = User.objects.create_user("stranger", password="not-a-real-password-123")
+        self.client.force_login(stranger)
+        self.assertRedirects(self.client.get(reverse("order-placed", args=[order.reference])), reverse("index"))
+
+    def test_status_is_translated(self):
+        order = self.make_order(status=Order.Status.SHIPPED)
+        self.client.force_login(self.customer)
+        self.client.post(reverse("set-language"), {"lang": "ar"})
+        self.assertContains(self.client.get(reverse("order-placed", args=[order.reference])), "تم الشحن")
+
+    def test_dashboard_links_follow_the_role(self):
+        self.client.force_login(self.customer)
+        page = self.client.get(reverse("dashboard"))
+        self.assertNotContains(page, reverse("category-list"))
+        self.assertNotContains(page, reverse("manage-orders"))
+        self.client.force_login(self.admin)
+        page = self.client.get(reverse("dashboard"))
+        self.assertContains(page, reverse("category-list"))
+        self.assertContains(page, reverse("manage-orders"))

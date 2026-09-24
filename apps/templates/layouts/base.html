@@ -22,6 +22,13 @@
     {% include 'includes/header.html' %}
 
     <main id="main" class="hb-main">
+      {% if messages %}
+        <div class="hb-shell" style="padding-top:20px" role="status">
+          {% for message in messages %}
+            <div class="{% if message.level_tag == 'error' %}hb-errors{% else %}hb-notice{% endif %}">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
       {% block content %}{% endblock content %}
     </main>
 
