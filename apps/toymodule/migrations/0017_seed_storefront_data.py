@@ -178,6 +178,13 @@ def unseed(apps, schema_editor):
         product.save(update_fields=["pcategory", "category"])
 
     apps.get_model("toymodule", "Category").objects.all().delete()
+
+    # An order protects the delivery option it used and records a currency
+    # code, so once one exists these rows are history, not seed data. Deleting
+    # them would raise ProtectedError and leave the schema half-reverted.
+    # `seed` uses update_or_create, so re-applying 0017 simply reuses them.
+    if apps.get_model("toymodule", "Order").objects.exists():
+        return
     apps.get_model("toymodule", "DeliveryOption").objects.all().delete()
     apps.get_model("toymodule", "Currency").objects.all().delete()
 

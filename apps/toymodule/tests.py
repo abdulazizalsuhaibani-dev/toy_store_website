@@ -8,9 +8,10 @@ access rule on the order confirmation page.
 
 from decimal import Decimal
 
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Group, User
+from django.core.management import call_command
 from django.db import connection
-from django.test import TestCase
+from django.test import TestCase, TransactionTestCase
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
@@ -77,10 +78,29 @@ class CatalogueTests(TestCase):
         self.assertContains(response, "Stacky")
         self.assertNotContains(response, "Mega Run")
 
-    def test_age_filter_excludes_a_range_that_does_not_fit(self):
-        response = self.client.get(reverse("shop"), {"age": "3-6"})
+    def test_age_filter_matches_ranges_that_overlap_the_band(self):
+        # Stacky is 3-6 and Mega Run is 6-10: each appears under every band it touches.
+        for band, present, absent in [
+            ("3-5", ["Stacky"], ["Mega Run"]),
+            ("6-8", ["Stacky", "Mega Run"], []),
+            ("9-up", ["Mega Run"], ["Stacky"]),
+            ("0-2", [], ["Stacky", "Mega Run"]),
+        ]:
+            response = self.client.get(reverse("shop"), {"age": band})
+            for name in present:
+                self.assertContains(response, name, msg_prefix=band)
+            for name in absent:
+                self.assertNotContains(response, name, msg_prefix=band)
+
+    def test_a_toy_for_every_age_is_not_lost_from_the_filters(self):
+        Product.objects.create(pname="Anything Ball", pprice=Decimal("10"), category=self.baby)  # default 3-10
+        for band in ["3-5", "6-8", "9-up"]:
+            self.assertContains(self.client.get(reverse("shop"), {"age": band}), "Anything Ball")
+
+    def test_unknown_age_is_ignored(self):
+        response = self.client.get(reverse("shop"), {"age": "banana"})
         self.assertContains(response, "Stacky")
-        self.assertNotContains(response, "Mega Run")
+        self.assertContains(response, "Mega Run")
 
     def test_price_band_filters(self):
         response = self.client.get(reverse("shop"), {"price": "high"})
@@ -174,6 +194,39 @@ class CartTests(TestCase):
         self.assertEqual(
             stranger.post(reverse("cart-update", args=[item.pk]), {"delta": "5"}).status_code, 404
         )
+
+
+class CartClampTests(TestCase):
+    def setUp(self):
+        self.toy = Product.objects.create(
+            pname="Stacky", pprice=Decimal("40"), category=Category.objects.get(name="Baby Toys")
+        )
+
+    def quantity(self):
+        return self.client.get(reverse("cart")).context["count"]
+
+    def test_add_clamps_a_huge_quantity(self):
+        self.client.post(reverse("cart-add", args=[self.toy.pk]), {"quantity": "99999999999"})
+        self.assertEqual(self.quantity(), 99)
+
+    def test_adding_again_cannot_pass_the_ceiling(self):
+        for _ in range(3):
+            self.client.post(reverse("cart-add", args=[self.toy.pk]), {"quantity": "60"})
+        self.assertEqual(self.quantity(), 99)
+
+    def test_add_survives_a_non_numeric_quantity(self):
+        self.client.post(reverse("cart-add", args=[self.toy.pk]), {"quantity": "lots"})
+        self.assertEqual(self.quantity(), 1)
+
+    def test_update_clamps_quantity_and_delta(self):
+        self.client.post(reverse("cart-add", args=[self.toy.pk]))
+        line = self.client.get(reverse("cart")).context["items"][0]
+        self.client.post(reverse("cart-update", args=[line.pk]), {"quantity": "99999999999"})
+        self.assertEqual(self.quantity(), 99)
+        self.client.post(reverse("cart-update", args=[line.pk]), {"delta": "99999999999"})
+        self.assertEqual(self.quantity(), 99)
+        self.client.post(reverse("cart-update", args=[line.pk]), {"quantity": "lots"})
+        self.assertEqual(self.quantity(), 99)
 
 
 class CheckoutTests(TestCase):
@@ -271,6 +324,8 @@ class CheckoutTests(TestCase):
 class AccountTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user("parent", password="not-a-real-password-123")
+        self.admin = User.objects.create_user("owner", password="not-a-real-password-123")
+        self.admin.groups.add(Group.objects.get(name="Admin"))
 
     def test_dashboard_requires_sign_in(self):
         response = self.client.get(reverse("dashboard"))
@@ -278,7 +333,36 @@ class AccountTests(TestCase):
         self.assertIn("login", response["Location"])
 
     def test_add_product_requires_sign_in(self):
-        self.assertEqual(self.client.get(reverse("addProduct")).status_code, 302)
+        response = self.client.get(reverse("addProduct"))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("login", response["Location"])
+
+    def test_customer_cannot_add_a_product(self):
+        self.client.force_login(self.user)
+        self.assertEqual(self.client.get(reverse("addProduct")).status_code, 403)
+        self.assertEqual(self.client.post(reverse("addProduct"), {"pname": "Sneaky"}).status_code, 403)
+        self.assertFalse(Product.objects.filter(pname="Sneaky").exists())
+
+    def test_admin_can_open_add_product(self):
+        self.client.force_login(self.admin)
+        self.assertEqual(self.client.get(reverse("addProduct")).status_code, 200)
+
+    def test_signup_makes_a_customer_not_an_admin(self):
+        self.client.post(
+            reverse("register"),
+            {"username": "newbie", "password1": "not-a-real-password-123", "password2": "not-a-real-password-123"},
+        )
+        newbie = User.objects.get(username="newbie")
+        self.assertEqual(list(newbie.groups.values_list("name", flat=True)), ["Customer"])
+        self.client.force_login(newbie)
+        self.assertEqual(self.client.get(reverse("addProduct")).status_code, 403)
+
+    def test_dashboard_shows_add_a_toy_only_to_admins(self):
+        add_url = reverse("addProduct")
+        self.client.force_login(self.user)
+        self.assertNotContains(self.client.get(reverse("dashboard")), add_url)
+        self.client.force_login(self.admin)
+        self.assertContains(self.client.get(reverse("dashboard")), add_url)
 
     def test_signing_in_adopts_a_cart_built_while_signed_out(self):
         toy = Product.objects.create(
@@ -318,7 +402,7 @@ class AccountTests(TestCase):
         self.assertTrue(User.objects.filter(username="newbie").exists())
 
     def test_add_product_rejects_an_inverted_age_range(self):
-        self.client.force_login(self.user)
+        self.client.force_login(self.admin)
         response = self.client.post(
             reverse("addProduct"),
             {
@@ -408,3 +492,35 @@ class BaseCurrencyDerivedTests(TestCase):
         response = self.client.get(reverse("shop"), {"price": "low"})
         names = [p.pname for p in response.context["products"]]
         self.assertEqual(names, ["Cheap"])
+
+
+class ReverseSeedMigrationTests(TransactionTestCase):
+    serialized_rollback = True
+
+    """Reversing 0017 must survive a database that has taken an order."""
+
+    def test_reverse_keeps_delivery_options_an_order_depends_on(self):
+        from django.db import connection
+        from django.db.migrations.executor import MigrationExecutor
+
+        executor = MigrationExecutor(connection)
+        executor.migrate([("toymodule", "0017_seed_storefront_data")])
+        apps = MigrationExecutor(connection).loader.project_state(
+            [("toymodule", "0017_seed_storefront_data")]
+        ).apps
+        try:
+            option = apps.get_model("toymodule", "DeliveryOption").objects.get(key="standard")
+            apps.get_model("toymodule", "Order").objects.create(
+                reference="HB-TESTTT",
+                full_name="Sam",
+                phone="1",
+                street="s",
+                city="c",
+                delivery_option=option,
+                subtotal=Decimal("10"),
+                total=Decimal("10"),
+            )
+            executor = MigrationExecutor(connection)
+            executor.migrate([("toymodule", "0016_storefront_schema")])  # would raise ProtectedError
+        finally:
+            call_command("migrate", "toymodule", verbosity=0)
