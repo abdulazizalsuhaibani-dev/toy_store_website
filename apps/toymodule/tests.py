@@ -6,12 +6,14 @@ wrong: currency conversion (money the shopper sees), the cart and checkout
 access rule on the order confirmation page.
 """
 
+import re
 from decimal import Decimal
 
 from django.contrib.auth.models import Group, User
 from django.core.management import call_command
 from django.db import connection
 from django.test import TestCase, TransactionTestCase
+from django.template.loader import render_to_string
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
@@ -1002,3 +1004,63 @@ class HomepageTests(TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertNotContains(response, "Birthday box")
             self.assertNotContains(response, "صندوق أعياد الميلاد")
+
+
+class HeaderTests(TestCase):
+    """The site header: explicit regions, and no filters posing as navigation."""
+
+    def header(self, response):
+        html = response.content.decode()
+        return html[html.index('<header class="hb-header">'):html.index("</header>")]
+
+    def test_main_nav_is_home_and_shop_only(self):
+        header = self.header(self.client.get(reverse("index")))
+        nav = header[header.index('aria-label="Main"'):]
+        nav = nav[:nav.index("</nav>")]
+        self.assertIn(f'href="{reverse("index")}"', nav)
+        self.assertIn(f'href="{reverse("shop")}"', nav)
+        self.assertFalse("?age=" in header)
+        self.assertFalse("?sort=price_desc" in header)
+
+    def test_regions_sit_inside_a_collapsible_menu(self):
+        header = self.header(self.client.get(reverse("index")))
+        menu = header[header.index('<details class="hb-menu">'):header.index("</details>")]
+        for region in ('aria-label="Main"', 'class="hb-utility"', 'class="hb-account"'):
+            with self.subTest(region=region):
+                self.assertTrue(region in menu, region)
+        for control in (reverse("set-language"), reverse("set-currency"), reverse("search")):
+            with self.subTest(control=control):
+                self.assertTrue(control in menu, control)
+        # The cart stays visible at every width, so it is outside the menu.
+        self.assertNotIn(reverse("cart"), menu)
+        self.assertIn(reverse("cart"), header)
+
+    def test_menu_toggle_is_translated(self):
+        for lang, word in (("en", "Menu"), ("ar", "القائمة")):
+            self.client.post(reverse("set-language"), {"lang": lang})
+            header = self.header(self.client.get(reverse("index")))
+            summary = header[header.index("<summary"):header.index("</summary>")]
+            with self.subTest(lang=lang):
+                self.assertIn(word, summary)
+
+    def test_account_links_for_a_guest(self):
+        header = self.header(self.client.get(reverse("index")))
+        self.assertIn(reverse("login"), header)
+        self.assertNotIn(reverse("dashboard"), header)
+        self.assertNotIn(reverse("logout"), header)
+
+    def test_account_links_when_signed_in(self):
+        User.objects.create_user("parent", password="not-a-real-password-123")
+        self.client.login(username="parent", password="not-a-real-password-123")
+        header = self.header(self.client.get(reverse("index")))
+        self.assertIn(reverse("dashboard"), header)
+        self.assertIn(reverse("logout"), header)
+        self.assertNotIn(f'href="{reverse("login")}"', header)
+
+    def test_no_inline_layout_styles(self):
+        # The shared logo carries its own sizing, and category pills take their
+        # colour from the database; everything else is laid out by happybox.css.
+        header = self.header(self.client.get(reverse("index")))
+        header = header.replace(render_to_string("includes/logo.html"), "")
+        header = re.sub(r'style="background:#[0-9A-Fa-f]{6}"', "", header)
+        self.assertEqual(re.findall(r'style="[^"]*"', header), [])
