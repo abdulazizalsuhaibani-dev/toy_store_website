@@ -6,7 +6,7 @@ context dict by hand would be four lines of noise per view and one bug the
 first time somebody forgets.
 """
 
-from .models import Category, Currency
+from .models import Category
 from . import storefront
 from .strings import direction, translations
 
@@ -21,10 +21,7 @@ def storefront_context(request):
         "is_rtl": lang == "ar",
         "other_lang": "en" if lang == "ar" else "ar",
         "currency": currency,
-        "currencies": list(Currency.objects.all()),
+        "currencies": storefront.get_currencies(request),
         "nav_categories": list(Category.objects.all()),
         "cart_count": storefront.cart_count(request),
-        "free_shipping_text": storefront.format_money(
-            storefront.FREE_SHIPPING_OVER, currency, lang
-        ),
     }

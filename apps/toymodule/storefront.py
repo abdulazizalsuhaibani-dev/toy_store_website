@@ -7,15 +7,11 @@ keyed by that session, not a dict inside it — see `Cart` for why.
 
 from decimal import Decimal
 
-from .models import Cart, CartItem, Currency
+from .models import Cart, CartItem, Currency, DeliveryOption
 from .strings import DEFAULT_LANGUAGE, LANGUAGES
 
 LANG_SESSION_KEY = "storefront_lang"
 CURRENCY_SESSION_KEY = "storefront_currency"
-
-# The design's free-shipping threshold, quoted in the hero badge and applied by
-# the Standard delivery option. Base currency (SAR), = USD 40 at the seeded peg.
-FREE_SHIPPING_OVER = Decimal("150")
 
 
 def get_language(request):
@@ -28,6 +24,23 @@ def set_language(request, lang):
         request.session[LANG_SESSION_KEY] = lang
 
 
+def get_currencies(request):
+    """Every currency, loaded once per request.
+
+    Each instance carries the base currency's rate, so `convert()` and
+    `{% money %}` need no query of their own however many prices a page shows.
+    """
+    cached = getattr(request, "_storefront_currencies", None)
+    if cached is None:
+        cached = list(Currency.objects.all())
+        base = next((c for c in cached if c.is_base), None)
+        base_rate = base.rate if base else Decimal("1")
+        for c in cached:
+            c.base_rate = base_rate
+        request._storefront_currencies = cached
+    return cached
+
+
 def get_currency(request):
     """The shopper's chosen currency, falling back to the base one.
 
@@ -36,7 +49,7 @@ def get_currency(request):
     rather than crashing, so a half-migrated deploy still serves pages.
     """
     code = request.session.get(CURRENCY_SESSION_KEY)
-    currencies = list(Currency.objects.all())
+    currencies = get_currencies(request)
     if not currencies:
         return None
     by_code = {c.code: c for c in currencies}
@@ -46,8 +59,31 @@ def get_currency(request):
 
 
 def set_currency(request, code):
-    if Currency.objects.filter(code=code).exists():
+    if any(c.code == code for c in get_currencies(request)):
         request.session[CURRENCY_SESSION_KEY] = code
+
+
+def usd_to_base(request, usd):
+    """A design figure quoted in USD, expressed in the base currency.
+
+    The design's price bands and promo are USD numbers. Deriving the
+    base-currency thresholds from the live rate keeps them agreeing with what
+    `pprice` means if the shop owner moves `is_base` to another currency.
+    """
+    currencies = get_currencies(request)
+    rate = currencies[0].base_rate if currencies else Decimal("1")
+    return Decimal(usd) * (rate or Decimal("1"))
+
+
+def free_shipping_threshold():
+    """The subtotal from which the cheapest free-shipping option is free.
+
+    Read from the delivery options themselves, the same rows `cost_for()`
+    charges from, so the hero badge cannot drift from the cart. None when no
+    option waives its fee.
+    """
+    thresholds = DeliveryOption.objects.filter(free_over__isnull=False).values_list("free_over", flat=True)
+    return min(thresholds, default=None)
 
 
 def format_money(amount, currency, lang):
