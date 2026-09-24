@@ -318,10 +318,11 @@ img { max-width: 100%; }
   border-inline-start: var(--line);
 }
 .hb-header__bar > .hb-cart-link { margin-inline-start: 8px; flex-shrink: 0; }
-/* Just above the collapse point a signed-in, Arabic bar runs ~30px short.
-   The "Prices in" label goes first: the select still shows the currency code,
-   and the label stays in the accessibility tree. */
-@media (min-width: 1221px) and (max-width: 1360px) {
+/* .hb-shell caps the bar at 1192px of content however wide the window is, and
+   a signed-in row with the "Prices in" label needs ~1195px. So the flat bar
+   never shows the label: the select still shows the currency code, and the
+   label stays in the accessibility tree (and visible in the collapsed menu). */
+@media (min-width: 1221px) {
   .hb-utility .hb-picker { padding-inline-start: 8px; }
   .hb-utility .hb-picker label {
     position: absolute;
