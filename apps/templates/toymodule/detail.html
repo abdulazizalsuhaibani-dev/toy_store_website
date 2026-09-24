@@ -29,11 +29,15 @@
         <p class="hb-small hb-muted" style="margin:0 0 20px">
           ★★★★★ {{ product.rating }} · {{ product.review_count }} {{ t.reviewsSuffix }}
         </p>
+      {% else %}
+        <p class="hb-small hb-muted" style="margin:0 0 20px">{{ t.noReviews }}</p>
       {% endif %}
 
       <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:22px;flex-wrap:wrap">
         <span class="hb-detail__price">{% money product.pprice %}</span>
-        {% if product.in_stock %}
+        {% if product.low_stock %}
+          <span class="hb-small" style="color:var(--red-link)">{{ t.only }} {{ product.quantity }} {{ t.left }}</span>
+        {% elif product.in_stock %}
           <span class="hb-small" style="color:var(--green)">{{ t.inStock }}</span>
         {% else %}
           <span class="hb-small" style="color:var(--red-link)">{{ t.outOfStock }}</span>
@@ -71,7 +75,7 @@
           {% endcomment %}
           <label class="hb-stepper" style="padding-inline-start:18px;gap:10px">
             <span class="hb-eyebrow">{{ t.quantity }}</span>
-            <input type="number" name="quantity" value="1" min="1" max="99" inputmode="numeric"
+            <input type="number" name="quantity" value="1" min="1" max="{{ product.max_orderable }}" inputmode="numeric"
                    style="width:78px;border:0;background:transparent;box-shadow:none;font-family:var(--display);font-weight:800;font-size:22px;text-align:center;padding:12px 0">
           </label>
           <button type="submit" class="hb-btn hb-btn--primary" style="flex:1;min-width:220px;font-size:25px;padding:17px 32px">{{ t.addToCart }}</button>

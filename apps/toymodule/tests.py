@@ -198,8 +198,9 @@ class CartTests(TestCase):
 
 class CartClampTests(TestCase):
     def setUp(self):
+        # Plenty in stock, so the 99 ceiling is what binds rather than the shelf.
         self.toy = Product.objects.create(
-            pname="Stacky", pprice=Decimal("40"), category=Category.objects.get(name="Baby Toys")
+            pname="Stacky", pprice=Decimal("40"), category=Category.objects.get(name="Baby Toys"), quantity=500
         )
 
     def quantity(self):
@@ -717,3 +718,205 @@ class OrderManagementTests(StaffTestCase):
         page = self.client.get(reverse("dashboard"))
         self.assertContains(page, reverse("category-list"))
         self.assertContains(page, reverse("manage-orders"))
+
+
+class AddToyFormTests(StaffTestCase):
+    def data(self, **extra):
+        data = {
+            "pname": "Rocket",
+            "pname_ar": "",
+            "currency": Currency.objects.get(code="SAR").pk,
+            "pprice": "75",
+            "category": Category.objects.get(name="Baby Toys").pk,
+            "blurb": "",
+            "blurb_ar": "",
+            "age_min": 3,
+            "age_max": 8,
+            "pieces": 1,
+            "play_type": Product.PlayType.SOLO,
+            "card_color": "#CDEBFB",
+            "quantity": 7,
+        }
+        data.update(extra)
+        return data
+
+    def add(self, **extra):
+        self.client.force_login(self.admin)
+        return self.client.post(reverse("addProduct"), self.data(**extra))
+
+    def test_currency_defaults_to_the_base_currency(self):
+        self.client.force_login(self.admin)
+        form = self.client.get(reverse("addProduct")).context["form"]
+        self.assertEqual(form.fields["currency"].initial.code, "SAR")
+
+    def test_price_in_the_base_currency_is_stored_as_typed(self):
+        self.add()
+        self.assertEqual(Product.objects.get(pname="Rocket").pprice, Decimal("75.00"))
+
+    def test_price_in_another_currency_is_converted_to_the_base(self):
+        # USD 20 at the 3.75 peg is SAR 75.
+        self.add(currency=Currency.objects.get(code="USD").pk, pprice="20")
+        self.assertEqual(Product.objects.get(pname="Rocket").pprice, Decimal("75.00"))
+
+    def test_three_decimal_currency_converts_and_rounds_to_two_places(self):
+        # KWD 12.26 is about SAR 150 (0.3065 KWD per USD, 3.75 SAR per USD).
+        self.add(currency=Currency.objects.get(code="KWD").pk, pprice="12.26")
+        self.assertEqual(Product.objects.get(pname="Rocket").pprice, Decimal("150.00"))
+
+    def test_to_base_undoes_convert(self):
+        for code in ["USD", "AED", "KWD"]:
+            currency = Currency.objects.get(code=code)
+            self.assertEqual(currency.to_base(currency.convert(Decimal("150"))), Decimal("150.00"), code)
+
+    def test_ratings_cannot_be_typed_in(self):
+        self.client.force_login(self.admin)
+        form = self.client.get(reverse("addProduct")).context["form"]
+        self.assertNotIn("rating", form.fields)
+        self.assertNotIn("review_count", form.fields)
+        self.add(rating="5.0", review_count=9999)
+        toy = Product.objects.get(pname="Rocket")
+        self.assertEqual((toy.rating, toy.review_count), (Decimal("0.0"), 0))
+
+    def test_quantity_is_saved(self):
+        self.add()
+        self.assertEqual(Product.objects.get(pname="Rocket").quantity, 7)
+
+    def test_a_toy_with_no_reviews_says_so(self):
+        toy = Product.objects.create(pname="Fresh", pprice=Decimal("10"), category=Category.objects.first())
+        self.assertContains(self.client.get(reverse("product", args=[toy.slug])), "No reviews yet")
+
+    def test_popular_sort_leads_with_featured_toys(self):
+        baby = Category.objects.get(name="Baby Toys")
+        Product.objects.create(pname="Aardvark", pprice=Decimal("10"), category=baby, review_count=900)
+        star = Product.objects.create(pname="Zebra", pprice=Decimal("10"), category=baby, is_featured=True)
+        names = [p.pname for p in self.client.get(reverse("shop")).context["products"]]
+        self.assertEqual(names[0], star.pname)
+
+
+class StockTests(TestCase):
+    def setUp(self):
+        self.baby = Category.objects.get(name="Baby Toys")
+        self.toy = Product.objects.create(pname="Stacky", pprice=Decimal("40"), category=self.baby, quantity=3)
+
+    def cart_count(self, client=None):
+        return (client or self.client).get(reverse("cart")).context["count"]
+
+    def address(self):
+        return {
+            "full_name": "Sam Rivera",
+            "phone": "0500000000",
+            "street": "18 Marbles Lane",
+            "city": "Riyadh",
+            "postcode": "12345",
+            "delivery_option": DeliveryOption.objects.get(key="standard").pk,
+            "payment_method": Order.Payment.CARD,
+        }
+
+    def test_in_stock_follows_quantity(self):
+        self.assertTrue(self.toy.in_stock)
+        self.toy.quantity = 0
+        self.assertFalse(self.toy.in_stock)
+
+    def test_low_stock_is_flagged_on_the_product_page(self):
+        response = self.client.get(reverse("product", args=[self.toy.slug]))
+        self.assertContains(response, "Only 3 left")
+        self.assertContains(response, 'max="3"')
+
+    def test_cannot_add_more_than_is_in_stock(self):
+        response = self.client.post(reverse("cart-add", args=[self.toy.pk]), {"quantity": "50", "next": "cart"}, follow=True)
+        self.assertEqual(self.cart_count(), 3)
+        self.assertContains(response, "Only 3 of")
+
+    def test_adding_again_cannot_pass_the_stock(self):
+        for _ in range(3):
+            self.client.post(reverse("cart-add", args=[self.toy.pk]), {"quantity": "2"})
+        self.assertEqual(self.cart_count(), 3)
+
+    def test_a_sold_out_toy_cannot_be_added(self):
+        self.toy.quantity = 0
+        self.toy.save()
+        response = self.client.post(reverse("cart-add", args=[self.toy.pk]), {"next": "cart"}, follow=True)
+        self.assertEqual(self.cart_count(), 0)
+        self.assertContains(response, "sold out")
+
+    def test_update_cannot_raise_a_line_past_the_stock(self):
+        self.client.post(reverse("cart-add", args=[self.toy.pk]))
+        line = self.client.get(reverse("cart")).context["items"][0]
+        self.client.post(reverse("cart-update", args=[line.pk]), {"delta": "10"})
+        self.assertEqual(self.cart_count(), 3)
+        self.client.post(reverse("cart-update", args=[line.pk]), {"quantity": "10"})
+        self.assertEqual(self.cart_count(), 3)
+
+    def test_checkout_takes_the_stock(self):
+        self.client.post(reverse("cart-add", args=[self.toy.pk]), {"quantity": "2"})
+        self.client.post(reverse("checkout"), self.address())
+        self.toy.refresh_from_db()
+        self.assertEqual(self.toy.quantity, 1)
+        self.assertEqual(Order.objects.count(), 1)
+
+    def test_checking_out_the_last_one_sells_out_the_toy(self):
+        self.toy.quantity = 1
+        self.toy.save()
+        self.client.post(reverse("cart-add", args=[self.toy.pk]))
+        self.client.post(reverse("checkout"), self.address())
+        self.toy.refresh_from_db()
+        self.assertEqual(self.toy.quantity, 0)
+        self.assertFalse(self.toy.in_stock)
+
+    def test_second_checkout_of_the_last_one_is_rejected(self):
+        # Both shoppers put the last toy in their carts while one was on the shelf.
+        self.toy.quantity = 1
+        self.toy.save()
+        first, second = self.client_class(), self.client_class()
+        for shopper in (first, second):
+            shopper.post(reverse("cart-add", args=[self.toy.pk]))
+        first.post(reverse("checkout"), self.address())
+        response = second.post(reverse("checkout"), self.address(), follow=True)
+        self.assertEqual(Order.objects.count(), 1)
+        self.toy.refresh_from_db()
+        self.assertEqual(self.toy.quantity, 0)
+        self.assertContains(response, "Nothing was charged")
+
+    def test_stock_that_dropped_after_the_cart_page_rejects_the_post(self):
+        self.client.post(reverse("cart-add", args=[self.toy.pk]), {"quantity": "3"})
+        Product.objects.filter(pk=self.toy.pk).update(quantity=1)
+        response = self.client.post(reverse("checkout"), self.address(), follow=True)
+        self.assertEqual(Order.objects.count(), 0)
+        self.assertContains(response, "Only 1 of")
+        self.toy.refresh_from_db()
+        self.assertEqual(self.toy.quantity, 1)
+
+    def test_a_short_line_rolls_back_the_others(self):
+        other = Product.objects.create(pname="Blocky", pprice=Decimal("20"), category=self.baby, quantity=5)
+        self.client.post(reverse("cart-add", args=[other.pk]), {"quantity": "2"})
+        self.client.post(reverse("cart-add", args=[self.toy.pk]), {"quantity": "3"})
+        Product.objects.filter(pk=self.toy.pk).update(quantity=0)
+        self.client.post(reverse("checkout"), self.address())
+        other.refresh_from_db()
+        self.assertEqual(other.quantity, 5)
+        self.assertEqual(Order.objects.count(), 0)
+
+    def test_checkout_page_sends_a_short_cart_back(self):
+        self.client.post(reverse("cart-add", args=[self.toy.pk]), {"quantity": "3"})
+        Product.objects.filter(pk=self.toy.pk).update(quantity=2)
+        self.assertRedirects(self.client.get(reverse("checkout")), reverse("cart"))
+
+
+class QuantityMigrationTests(TransactionTestCase):
+    serialized_rollback = True
+
+    def test_stock_flag_becomes_a_count(self):
+        from django.db import connection
+        from django.db.migrations.executor import MigrationExecutor
+
+        MigrationExecutor(connection).migrate([("toymodule", "0020_order_status")])
+        try:
+            apps = MigrationExecutor(connection).loader.project_state([("toymodule", "0020_order_status")]).apps
+            Historic = apps.get_model("toymodule", "Product")
+            Historic.objects.create(pname="Has", slug="has", pprice=Decimal("1"), in_stock=True)
+            Historic.objects.create(pname="Gone", slug="gone", pprice=Decimal("1"), in_stock=False)
+            MigrationExecutor(connection).migrate([("toymodule", "0021_product_quantity")])
+            self.assertEqual(Product.objects.get(slug="has").quantity, 10)
+            self.assertEqual(Product.objects.get(slug="gone").quantity, 0)
+        finally:
+            call_command("migrate", "toymodule", verbosity=0)

@@ -8,7 +8,7 @@ from django.utils import timezone
 from django.utils.text import slugify
 from django.forms.widgets import PasswordInput, TextInput
 
-from .models import Category, DeliveryOption, Order, Product
+from .models import Category, Currency, DeliveryOption, Order, Product
 from .roles import CUSTOMER_GROUP
 
 
@@ -22,7 +22,18 @@ class AddProductForm(ModelForm):
     `pcategory` used to be a free-text CharField here, so two products could
     sit in "Baby toys" and "Baby Toys" and only one of them would ever show up
     on the category page. It is a ForeignKey now, which makes that unspellable.
+
+    The price is typed in a currency of the person's choosing and converted to
+    the base currency in `clean()`. It is still stored once, in the base
+    currency, so `{% money %}` and every total downstream are untouched.
+    `rating` and `review_count` are deliberately absent: they are derived
+    values, not something to be typed.
     """
+
+    currency = forms.ModelChoiceField(
+        queryset=Currency.objects.all(), empty_label=None, label="Price currency"
+    )
+    field_order = ["pname", "pname_ar", "pimage", "currency", "pprice"]
 
     class Meta:
         model = Product
@@ -40,9 +51,7 @@ class AddProductForm(ModelForm):
             "play_type",
             "badge",
             "card_color",
-            "rating",
-            "review_count",
-            "in_stock",
+            "quantity",
             "is_featured",
         ]
         labels = {
@@ -55,7 +64,7 @@ class AddProductForm(ModelForm):
             "age_min": "Youngest age",
             "age_max": "Oldest age",
             "card_color": "Card colour",
-            "review_count": "Number of reviews",
+            "quantity": "Stock quantity",
         }
         help_texts = {
             "card_color": "Hex colour behind the photo on the product card, e.g. #CDEBFB.",
@@ -74,6 +83,22 @@ class AddProductForm(ModelForm):
             self.add_error("age_max", "The oldest age cannot be below the youngest age.")
         return cleaned
 
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        field = self.fields["currency"]
+        field.label_from_instance = lambda currency: currency.label
+        base = Currency.objects.filter(is_base=True).first()
+        if base is not None:
+            field.initial = base
+            field.help_text = f"Enter the price in this currency. It is stored in {base.code}, the shop's base currency."
+
+    def clean(self):
+        cleaned = super().clean()
+        price, currency = cleaned.get("pprice"), cleaned.get("currency")
+        if price is not None and currency is not None:
+            cleaned["pprice"] = currency.to_base(price)
+        return cleaned
 
 class AddUserForm(UserCreationForm):
     class Meta:

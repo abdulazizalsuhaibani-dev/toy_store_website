@@ -37,15 +37,17 @@ class DeliveryOptionAdmin(admin.ModelAdmin):
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ("pname", "category", "pprice", "age_label", "badge", "rating", "review_count", "is_featured", "in_stock")
-    list_filter = ("category", "badge", "play_type", "is_featured", "in_stock")
+    list_display = ("pname", "category", "pprice", "age_label", "badge", "rating", "review_count", "is_featured", "quantity")
+    list_filter = ("category", "badge", "play_type", "is_featured")
     search_fields = ("pname", "pname_ar", "blurb")
-    list_editable = ("is_featured", "in_stock")
+    list_editable = ("is_featured", "quantity")
+    # Derived from customer reviews, not typed in.
+    readonly_fields = ("rating", "review_count")
     prepopulated_fields = {"slug": ("pname",)}
     fieldsets = (
         (None, {"fields": ("pname", "pname_ar", "slug", "category", "pprice", "pimage")}),
         ("Copy", {"fields": ("blurb", "blurb_ar")}),
-        ("On the shelf", {"fields": ("age_min", "age_max", "pieces", "play_type", "in_stock")}),
+        ("On the shelf", {"fields": ("age_min", "age_max", "pieces", "play_type", "quantity")}),
         ("Presentation", {"fields": ("badge", "card_color", "is_featured")}),
         ("Reviews", {"fields": ("rating", "review_count")}),
     )

@@ -22,6 +22,13 @@ from django.db import models
 from django.utils.text import slugify
 
 
+# The most of one toy a cart may hold. The product page's `max` mirrors it, and
+# an unclamped value overflows Postgres's 32-bit integer into a 500.
+MAX_CART_QUANTITY = 99
+# At or below this many, the shop tells the shopper how few are left.
+LOW_STOCK = 5
+
+
 class Category(models.Model):
     """A shelf in the shop.
 
@@ -105,6 +112,21 @@ class Currency(models.Model):
         value = Decimal(amount) * (self.rate / base_rate)
         quantum = Decimal(1).scaleb(-self.decimal_places)
         return value.quantize(quantum, rounding=ROUND_HALF_UP)
+
+    def to_base(self, amount):
+        """The inverse of `convert()`: an amount in this currency, in the base one.
+
+        Used where somebody types a price in a currency of their choosing; what
+        is stored is always base-currency, to the two places `pprice` keeps.
+        """
+        base_rate = self.base_rate
+        if base_rate is None:
+            base = Currency.objects.filter(is_base=True).first()
+            base_rate = base.rate if base else Decimal("1")
+        if not base_rate:
+            base_rate = Decimal("1")
+        value = Decimal(amount) * (base_rate / self.rate)
+        return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 class DeliveryOption(models.Model):
@@ -200,7 +222,9 @@ class Product(models.Model):
     # Card background behind the product photo. Part of the design's rhythm:
     # adjacent cards deliberately do not share a colour.
     card_color = models.CharField(max_length=7, default="#CDEBFB")
-    in_stock = models.BooleanField(default=True)
+    # How many are on the shelf. `in_stock` is derived from it, so there is one
+    # source of truth; the cart and checkout both enforce it.
+    quantity = models.PositiveIntegerField(default=10, help_text="How many are in stock.")
     is_featured = models.BooleanField(
         default=False, help_text="Shown in the homepage 'Flying off the shelves' row."
     )
@@ -211,6 +235,19 @@ class Product(models.Model):
 
     def __str__(self):
         return self.pname
+
+    @property
+    def in_stock(self):
+        return self.quantity > 0
+
+    @property
+    def low_stock(self):
+        return 0 < self.quantity <= LOW_STOCK
+
+    @property
+    def max_orderable(self):
+        """The most a cart may hold of this toy."""
+        return min(MAX_CART_QUANTITY, self.quantity)
 
     def save(self, *args, **kwargs):
         if not self.slug:

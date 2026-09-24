@@ -31,6 +31,11 @@
               <div class="hb-small hb-muted" style="margin-top:4px">
                 {{ t.ages }} <span class="hb-keep-ltr">{{ item.product.age_label }}</span> · {% money item.product.pprice %} {{ t.each }}
               </div>
+              {% if item.over_stock or item.product.low_stock or not item.product.in_stock %}
+                <div class="hb-small" style="margin-top:4px;color:var(--red-link)">
+                  {% if not item.product.in_stock %}{{ t.outOfStock }}{% else %}{{ t.only }} {{ item.product.quantity }} {{ t.left }}{% endif %}
+                </div>
+              {% endif %}
               <form method="post" action="{% url 'cart-update' item.pk %}" style="margin-top:8px">
                 {% csrf_token %}
                 <input type="hidden" name="quantity" value="0">
