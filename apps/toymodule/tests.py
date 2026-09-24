@@ -286,6 +286,35 @@ class AccountTests(TestCase):
         self.client.post(reverse("login"), {"username": "parent", "password": "not-a-real-password-123"})
         self.assertEqual(self.client.get(reverse("cart")).context["count"], 1)
 
+    def test_login_honours_a_same_site_next(self):
+        response = self.client.post(
+            reverse("login") + "?next=/dashboard/orders",
+            {"username": "parent", "password": "not-a-real-password-123"},
+        )
+        self.assertRedirects(response, "/dashboard/orders", fetch_redirect_response=False)
+
+    def test_login_ignores_an_off_site_next(self):
+        response = self.client.post(
+            reverse("login") + "?next=https://evil.example/",
+            {"username": "parent", "password": "not-a-real-password-123"},
+        )
+        self.assertRedirects(response, reverse("dashboard"), fetch_redirect_response=False)
+
+    def test_logout_needs_a_post(self):
+        self.client.force_login(self.user)
+        self.assertEqual(self.client.get(reverse("logout")).status_code, 405)
+        self.assertIn("_auth_user_id", self.client.session)
+        self.client.post(reverse("logout"))
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+    def test_register_redirects_so_refresh_does_not_resubmit(self):
+        response = self.client.post(
+            reverse("register"),
+            {"username": "newbie", "password1": "not-a-real-password-123", "password2": "not-a-real-password-123"},
+        )
+        self.assertRedirects(response, reverse("register-success"))
+        self.assertTrue(User.objects.filter(username="newbie").exists())
+
     def test_add_product_rejects_an_inverted_age_range(self):
         self.client.force_login(self.user)
         response = self.client.post(
