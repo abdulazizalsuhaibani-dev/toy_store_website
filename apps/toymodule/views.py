@@ -16,6 +16,7 @@ from django.contrib.auth import login as auth_login, logout as auth_logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import PermissionDenied
+from django.core.paginator import Paginator
 from django.db import DatabaseError, connection, transaction
 from django.db.models import Count, F, Max, Q
 from django.http import Http404, HttpResponse, HttpResponsePermanentRedirect, HttpResponseRedirect
@@ -48,10 +49,22 @@ PRICE_BANDS_USD = {
     "high": (Decimal("40"), None),
 }
 
-# The homepage promo's was/now prices, in USD (SAR 225 / 158 at the seeded
-# peg; the second is 158 / 3.75 so it still renders as SAR 158).
-PROMO_FROM_USD = Decimal("60")
-PROMO_FOR_USD = Decimal("42.133333")
+# Toys per page on the listing and search screens. Twelve fills the card grid
+# in rows of two, three, four and six, so no page ends on a ragged row.
+PAGE_SIZE = 12
+
+
+def _paginate(request, products):
+    """One page of a catalogue queryset, from `?page=`.
+
+    `get_page` forgives a junk or out-of-range value (first page for the former,
+    last for the latter) so a stale bookmark shows toys rather than a 404. The
+    elided range keeps the pager short however large the catalogue grows.
+    """
+    paginator = Paginator(products, PAGE_SIZE)
+    page = paginator.get_page(request.GET.get("page"))
+    page.elided = list(paginator.get_elided_page_range(page.number, on_each_side=2, on_ends=1))
+    return page
 
 
 def _price_bands(request):
@@ -259,8 +272,6 @@ def index(request):
                 "sort_order", "name"
             ),
             "featured": featured,
-            "promo_from": storefront.usd_to_base(request, PROMO_FROM_USD),
-            "promo_for": storefront.usd_to_base(request, PROMO_FOR_USD),
             "free_shipping_text": free_shipping_text,
         },
     )
@@ -269,20 +280,22 @@ def index(request):
 def shop(request):
     """Everything, filterable. The design's "See all toys"."""
     products, state = _catalogue(request)
+    page = _paginate(request, products)
     return render(
         request,
         "toymodule/listing.html",
-        {"category": None, "products": products, "total": Product.objects.count(), **state},
+        {"category": None, "products": page, "page_obj": page, "total": Product.objects.count(), **state},
     )
 
 
 def category(request, slug):
     cat = get_object_or_404(Category, slug=slug)
     products, state = _catalogue(request, cat.products.select_related("category"))
+    page = _paginate(request, products)
     return render(
         request,
         "toymodule/listing.html",
-        {"category": cat, "products": products, "total": cat.products.count(), **state},
+        {"category": cat, "products": page, "page_obj": page, "total": cat.products.count(), **state},
     )
 
 
@@ -309,11 +322,13 @@ def search(request):
         products = products.filter(category__slug=cat_slug)
     else:
         cat_slug = ""
+    page = _paginate(request, products)
     return render(
         request,
         "toymodule/search.html",
         {
-            "products": products,
+            "products": page,
+            "page_obj": page,
             "categories": categories,
             "cat": cat_slug,
             "suggestions": ["blocks", "kite", "bear", "marble", "robot"],

@@ -29,7 +29,7 @@
     {% endfor %}
 
     <div style="margin-inline-start:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      <span class="hb-small hb-muted">{{ products|length }} {{ t.of }} {{ total }} {{ t.shownOf }}</span>
+      <span class="hb-small hb-muted">{{ page_obj.paginator.count }} {{ t.of }} {{ total }} {{ t.shownOf }}</span>
       {% for option in sort_options %}
         <a class="hb-pill hb-pill--sm {% if option.selected %}is-on{% endif %}"
            href="{% querystring request sort=option.key %}">{{ option.label }}</a>
@@ -43,6 +43,7 @@
     <div class="hb-grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:22px">
       {% for p in products %}{% include 'includes/product_card.html' with p=p media_height='210px' %}{% endfor %}
     </div>
+    {% include 'includes/pagination.html' %}
   {% elif age or price or query %}
     <div class="hb-panel hb-panel--dashed" style="text-align:center;padding:48px 28px">
       <div class="hb-display" style="font-size:28px;margin-bottom:8px">{{ t.noMatchTitle }}</div>

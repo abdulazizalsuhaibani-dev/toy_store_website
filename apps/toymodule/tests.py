@@ -920,3 +920,85 @@ class QuantityMigrationTests(TransactionTestCase):
             self.assertEqual(Product.objects.get(slug="gone").quantity, 0)
         finally:
             call_command("migrate", "toymodule", verbosity=0)
+
+
+class PaginationTests(TestCase):
+    def setUp(self):
+        self.baby = Category.objects.get(name="Baby Toys")
+        self.outdoors = Category.objects.get(name="Outdoors")
+        for i in range(30):
+            Product.objects.create(
+                pname=f"Toy {i:02d}", pprice=Decimal("10"), category=self.baby if i < 25 else self.outdoors
+            )
+
+    def names(self, response):
+        return [p.pname for p in response.context["products"]]
+
+    def test_shop_shows_a_page_at_a_time(self):
+        sizes = [len(self.client.get(reverse("shop"), {"page": n}).context["products"]) for n in (1, 2, 3)]
+        self.assertEqual(sizes, [12, 12, 6])
+
+    def test_pages_do_not_overlap(self):
+        seen = []
+        for n in (1, 2, 3):
+            seen += self.names(self.client.get(reverse("shop"), {"page": n}))
+        self.assertEqual(len(seen), 30)
+        self.assertEqual(len(set(seen)), 30)
+
+    def test_junk_and_out_of_range_pages_do_not_error(self):
+        self.assertEqual(self.client.get(reverse("shop"), {"page": "abc"}).context["products"].number, 1)
+        self.assertEqual(self.client.get(reverse("shop"), {"page": "999"}).context["products"].number, 3)
+        self.assertEqual(self.client.get(reverse("shop"), {"page": "-4"}).status_code, 200)
+
+    def test_counter_shows_matches_against_the_whole_shelf(self):
+        response = self.client.get(reverse("shop"), {"page": 2})
+        self.assertContains(response, "30 of 30 shown")
+
+    def test_category_page_is_paginated(self):
+        response = self.client.get(reverse("category", args=[self.baby.slug]))
+        self.assertEqual(len(response.context["products"]), 12)
+        self.assertEqual(response.context["products"].paginator.count, 25)
+
+    def test_search_is_paginated_and_counts_all_matches(self):
+        response = self.client.get(reverse("search"), {"q": "Toy", "page": 3})
+        self.assertEqual(len(response.context["products"]), 6)
+        self.assertContains(response, "30 toys")
+
+    def test_pager_links_keep_the_filters_and_filters_drop_the_page(self):
+        response = self.client.get(reverse("shop"), {"sort": "price_asc", "page": 2})
+        self.assertContains(response, "?sort=price_asc&amp;page=3")
+        self.assertContains(response, 'rel="prev"')
+        # The sort pills must not carry page=2 into a different ordering.
+        self.assertContains(response, 'href="?sort=popular"')
+        self.assertContains(response, 'href="?sort=price_desc"')
+
+    def test_pager_is_hidden_when_one_page_is_enough(self):
+        Product.objects.filter(category=self.baby).delete()
+        self.assertNotContains(self.client.get(reverse("shop")), 'aria-label="Pages"')
+
+    def test_long_catalogues_get_an_elided_pager(self):
+        category = self.baby
+        for i in range(30, 300):
+            Product.objects.create(pname=f"Toy {i}", pprice=Decimal("10"), category=category)
+        page = self.client.get(reverse("shop"), {"page": 12}).context["products"]
+        self.assertIn(page.paginator.ELLIPSIS, page.elided)
+        self.assertLess(len(page.elided), 12)
+
+    def test_prices_still_cost_one_currency_query_per_page(self):
+        with CaptureQueriesContext(connection) as captured:
+            self.client.get(reverse("shop"))
+        self.assertEqual(len(currency_queries(captured)), 1)
+
+    def test_arabic_pager_renders(self):
+        self.client.post(reverse("set-language"), {"lang": "ar"})
+        self.assertContains(self.client.get(reverse("shop"), {"page": 2}), "التالي")
+
+
+class HomepageTests(TestCase):
+    def test_the_birthday_box_promo_is_gone(self):
+        for lang in ("en", "ar"):
+            self.client.post(reverse("set-language"), {"lang": lang})
+            response = self.client.get(reverse("index"))
+            self.assertEqual(response.status_code, 200)
+            self.assertNotContains(response, "Birthday box")
+            self.assertNotContains(response, "صندوق أعياد الميلاد")
