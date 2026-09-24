@@ -9,7 +9,9 @@ access rule on the order confirmation page.
 from decimal import Decimal
 
 from django.contrib.auth.models import User
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
 from .models import Category, Currency, DeliveryOption, Order, Product
@@ -350,3 +352,59 @@ class SmokeTests(TestCase):
 
     def test_healthz(self):
         self.assertEqual(self.client.get(reverse("healthz")).status_code, 200)
+
+
+def currency_queries(captured):
+    return [q for q in captured.captured_queries if 'FROM "toymodule_currency"' in q["sql"]]
+
+
+class CurrencyQueryTests(TestCase):
+    def test_shop_reads_the_currency_table_once(self):
+        category = Category.objects.get(name="Baby Toys")
+        for i in range(20):
+            Product.objects.create(pname=f"Toy {i}", pprice=Decimal("40"), category=category)
+        with CaptureQueriesContext(connection) as captured:
+            self.client.get(reverse("shop"))
+        self.assertEqual(len(currency_queries(captured)), 1)
+
+    def test_receipt_reads_the_currency_table_once(self):
+        toy = Product.objects.create(
+            pname="Stacky", pprice=Decimal("40"), category=Category.objects.get(name="Baby Toys")
+        )
+        self.client.post(reverse("cart-add", args=[toy.pk]), {"quantity": 2})
+        self.client.post(
+            reverse("checkout"),
+            {
+                "full_name": "Sam Rivera",
+                "phone": "0500000000",
+                "street": "18 Marbles Lane",
+                "city": "Riyadh",
+                "postcode": "12345",
+                "delivery_option": DeliveryOption.objects.get(key="standard").pk,
+                "payment_method": Order.Payment.CARD,
+            },
+        )
+        order = Order.objects.get()
+        with CaptureQueriesContext(connection) as captured:
+            self.client.get(reverse("order-placed", args=[order.reference]))
+        self.assertEqual(len(currency_queries(captured)), 1)
+
+
+class BaseCurrencyDerivedTests(TestCase):
+    def test_hero_badge_follows_the_delivery_option(self):
+        DeliveryOption.objects.filter(key="standard").update(free_over=Decimal("200"))
+        self.assertContains(self.client.get(reverse("index")), "SAR 200")
+
+    def test_hero_badge_hidden_when_nothing_ships_free(self):
+        DeliveryOption.objects.update(free_over=None)
+        self.assertNotContains(self.client.get(reverse("index")), "🚚")
+
+    def test_price_bands_follow_the_base_currency(self):
+        Currency.objects.filter(code="SAR").update(is_base=False)
+        Currency.objects.filter(code="USD").update(is_base=True)
+        category = Category.objects.get(name="Baby Toys")
+        Product.objects.create(pname="Cheap", pprice=Decimal("15"), category=category)  # USD 15
+        Product.objects.create(pname="Dear", pprice=Decimal("50"), category=category)  # USD 50
+        response = self.client.get(reverse("shop"), {"price": "low"})
+        names = [p.pname for p in response.context["products"]]
+        self.assertEqual(names, ["Cheap"])

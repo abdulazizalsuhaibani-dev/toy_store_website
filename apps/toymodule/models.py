@@ -89,10 +89,17 @@ class Currency(models.Model):
     def __str__(self):
         return self.code
 
+    # The base currency's rate, attached by `storefront.get_currencies()` so a
+    # page full of prices does not ask the database for it once per price.
+    # None means "not resolved": convert() then looks it up itself.
+    base_rate = None
+
     def convert(self, amount):
         """Convert `amount`, expressed in the base currency, into this one."""
-        base = Currency.objects.filter(is_base=True).first()
-        base_rate = base.rate if base else Decimal("1")
+        base_rate = self.base_rate
+        if base_rate is None:
+            base = Currency.objects.filter(is_base=True).first()
+            base_rate = base.rate if base else Decimal("1")
         if not base_rate:
             base_rate = Decimal("1")
         value = Decimal(amount) * (self.rate / base_rate)

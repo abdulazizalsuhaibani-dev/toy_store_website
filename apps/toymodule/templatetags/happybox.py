@@ -34,7 +34,10 @@ def money_in(context, code, amount):
     """
     if amount is None:
         return ""
-    currency = Currency.objects.filter(code=code).first()
+    # The context processor already loaded every currency, base rate attached.
+    currency = next((c for c in context.get("currencies") or () if c.code == code), None)
+    if currency is None:
+        currency = Currency.objects.filter(code=code).first()
     return storefront.format_money(amount, currency, context.get("lang", "en"))
 
 

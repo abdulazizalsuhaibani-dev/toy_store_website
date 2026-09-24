@@ -17,7 +17,7 @@
 
   <div class="hb-shell hb-hero__inner">
     <div>
-      <span class="hb-badge hb-badge--flat" style="margin-bottom:18px">{{ t.freeShipOver }} {{ free_shipping_text }} 🚚</span>
+      {% if free_shipping_text %}<span class="hb-badge hb-badge--flat" style="margin-bottom:18px">{{ t.freeShipOver }} {{ free_shipping_text }} 🚚</span>{% endif %}
       <h1 class="hb-hero__title">{{ t.heroTitle1 }}<br>{{ t.heroTitle2 }}</h1>
       <p class="hb-hero__body">{{ t.heroBody }}</p>
       <div class="hb-row" style="gap:14px">

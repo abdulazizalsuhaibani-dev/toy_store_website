@@ -31,12 +31,25 @@ from .strings import translations
 # the same thing for its own eight products and nothing sensible beyond them.
 AGE_BANDS = [("3-6", 3, 6), ("5-10", 5, 10), ("6-10", 6, 10)]
 
-# Price bands, in the base currency (SAR). USD 20 / USD 40 at the seeded peg.
-PRICE_BANDS = {
-    "low": (None, Decimal("75")),
-    "mid": (Decimal("75"), Decimal("150")),
-    "high": (Decimal("150"), None),
+# Price bands as the design specified them, in USD. `_price_bands()` turns
+# them into base-currency thresholds, so they follow `Currency.is_base`.
+PRICE_BANDS_USD = {
+    "low": (None, Decimal("20")),
+    "mid": (Decimal("20"), Decimal("40")),
+    "high": (Decimal("40"), None),
 }
+
+# The homepage promo's was/now prices, in USD (SAR 225 / 158 at the seeded
+# peg; the second is 158 / 3.75 so it still renders as SAR 158).
+PROMO_FROM_USD = Decimal("60")
+PROMO_FOR_USD = Decimal("42.133333")
+
+
+def _price_bands(request):
+    return {
+        key: tuple(None if edge is None else storefront.usd_to_base(request, edge) for edge in edges)
+        for key, edges in PRICE_BANDS_USD.items()
+    }
 
 SORTS = {
     "popular": ["-review_count", "pname"],
@@ -79,8 +92,9 @@ def _catalogue(request, base=None):
     else:
         age = ""
 
-    if price in PRICE_BANDS:
-        low, high = PRICE_BANDS[price]
+    price_bands = _price_bands(request)
+    if price in price_bands:
+        low, high = price_bands[price]
         if low is not None:
             products = products.filter(pprice__gte=low)
         if high is not None:
@@ -97,7 +111,7 @@ def _catalogue(request, base=None):
     def cash(amount):
         return storefront.format_money(amount, currency, lang)
 
-    low_edge, high_edge = PRICE_BANDS["mid"]
+    low_edge, high_edge = price_bands["mid"]
     state = {
         "query": query,
         "age": age,
@@ -191,6 +205,14 @@ def index(request):
         # A shop with nothing flagged should still show the shelf rather than a
         # hole where four cards belong.
         featured = list(Product.objects.select_related("category").order_by("-review_count")[:4])
+    threshold = storefront.free_shipping_threshold()
+    free_shipping_text = (
+        storefront.format_money(
+            threshold, storefront.get_currency(request), storefront.get_language(request)
+        )
+        if threshold is not None
+        else ""
+    )
     return render(
         request,
         "toymodule/index.html",
@@ -201,8 +223,9 @@ def index(request):
                 "sort_order", "name"
             ),
             "featured": featured,
-            "promo_from": Decimal("225"),
-            "promo_for": Decimal("158"),
+            "promo_from": storefront.usd_to_base(request, PROMO_FROM_USD),
+            "promo_for": storefront.usd_to_base(request, PROMO_FOR_USD),
+            "free_shipping_text": free_shipping_text,
         },
     )
 
