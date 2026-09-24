@@ -1,0 +1,41 @@
+{% extends "layouts/base.html" %}
+{% load happybox %}
+
+{% block title %}{{ t.manageOrders }}{% endblock %}
+
+{% block content %}
+<div class="hb-shell hb-shell--narrow" style="padding-top:44px">
+  <h1 style="font-size:clamp(32px,5vw,48px);margin-bottom:8px">{{ t.manageOrders }}</h1>
+  <p class="hb-muted" style="margin:0 0 20px">{{ t.manageOrdersBody }}</p>
+
+  <div class="hb-row" style="gap:8px;flex-wrap:wrap;margin-bottom:24px">
+    <a class="hb-pill hb-pill--sm{% if not status %} is-on{% endif %}" href="{% url 'manage-orders' %}">{{ t.allStatuses }}</a>
+    {% for value, text in statuses %}
+      <a class="hb-pill hb-pill--sm{% if status == value %} is-on{% endif %}" href="?status={{ value }}">{{ text }}</a>
+    {% endfor %}
+  </div>
+
+  {% if orders %}
+    <div style="display:grid;gap:16px">
+      {% for order in orders %}
+        <div class="hb-line">
+          <div style="flex:1;min-width:200px">
+            <a class="hb-line__name hb-keep-ltr" href="{% url 'manage-order' order.reference %}">{{ order.reference }}</a>
+            <span class="hb-pill hb-pill--sm" style="margin-inline-start:8px">{% status_label order %}</span>
+            <div class="hb-small hb-muted" style="margin-top:4px">
+              {{ order.created_at|date:"j M Y H:i" }} · {{ order.full_name }}{% if order.user %} ({{ order.user.username }}){% endif %}
+            </div>
+          </div>
+          <span class="hb-line__total">{% money_in order.currency_code order.total %}</span>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="hb-panel hb-panel--dashed" style="text-align:center;padding:48px 28px">
+      <p class="hb-muted" style="font-size:17px;margin:0">{{ t.noMatchingOrders }}</p>
+    </div>
+  {% endif %}
+
+  <p style="margin-top:20px"><a href="{% url 'dashboard' %}">{{ t.backTo }} {{ t.dashboard }}</a></p>
+</div>
+{% endblock content %}

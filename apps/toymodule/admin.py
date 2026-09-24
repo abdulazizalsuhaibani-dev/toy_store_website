@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.utils import timezone
 
 from .models import (
     Cart,
@@ -72,8 +73,13 @@ class OrderItemInline(admin.TabularInline):
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ("reference", "full_name", "city", "total", "currency_code", "payment_method", "created_at")
-    list_filter = ("payment_method", "delivery_option", "gift_wrap", "currency_code")
+    list_display = ("reference", "full_name", "city", "total", "currency_code", "status", "payment_method", "created_at")
+    list_filter = ("status", "payment_method", "delivery_option", "gift_wrap", "currency_code")
     search_fields = ("reference", "full_name", "phone", "city")
-    readonly_fields = ("reference", "subtotal", "shipping_cost", "total", "currency_code", "created_at")
+    readonly_fields = ("reference", "subtotal", "shipping_cost", "total", "currency_code", "status_changed_at", "created_at")
     inlines = [OrderItemInline]
+
+    def save_model(self, request, obj, form, change):
+        if change and "status" in form.changed_data:
+            obj.status_changed_at = timezone.now()
+        super().save_model(request, obj, form, change)

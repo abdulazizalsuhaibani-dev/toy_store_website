@@ -1,0 +1,46 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}{{ t.manageCategories }}{% endblock %}
+
+{% block content %}
+<div class="hb-shell hb-shell--narrow" style="padding-top:44px">
+  <h1 style="font-size:clamp(32px,5vw,48px);margin-bottom:8px">{{ t.manageCategories }}</h1>
+  <p class="hb-muted" style="margin:0 0 20px">{{ t.manageCategoriesBody }}</p>
+  {% if perms.toymodule.add_category %}
+    <p style="margin:0 0 24px"><a class="hb-btn hb-btn--primary hb-btn--sm" href="{% url 'category-create' %}">{{ t.addCategory }}</a></p>
+  {% endif %}
+
+  <div style="display:grid;gap:16px">
+    {% for category in categories %}
+      <div class="hb-line">
+        <span aria-hidden="true" style="width:52px;height:52px;border:var(--line);border-radius:16px;display:grid;place-items:center;font-size:26px;background:{{ category.color }}">{{ category.glyph }}</span>
+        <div style="flex:1;min-width:180px">
+          <div class="hb-line__name">{{ category.name }}{% if category.name_ar %} · {{ category.name_ar }}{% endif %}</div>
+          <div class="hb-small hb-muted">/c/{{ category.slug }}/ · {{ category.product_count }} {{ t.toysCount }}</div>
+        </div>
+        <div class="hb-row" style="gap:8px;flex-wrap:wrap">
+          {% if perms.toymodule.change_category %}
+            <form method="post" action="{% url 'category-move' category.pk %}" style="display:inline">
+              {% csrf_token %}<input type="hidden" name="direction" value="up">
+              <button type="submit" class="hb-pill hb-pill--sm" {% if forloop.first %}disabled{% endif %} aria-label="{{ t.moveUp }}" title="{{ t.moveUp }}">↑</button>
+            </form>
+            <form method="post" action="{% url 'category-move' category.pk %}" style="display:inline">
+              {% csrf_token %}<input type="hidden" name="direction" value="down">
+              <button type="submit" class="hb-pill hb-pill--sm" {% if forloop.last %}disabled{% endif %} aria-label="{{ t.moveDown }}" title="{{ t.moveDown }}">↓</button>
+            </form>
+            <a class="hb-pill hb-pill--sm" href="{% url 'category-edit' category.pk %}">{{ t.edit }}</a>
+          {% endif %}
+          {% if perms.toymodule.delete_category %}
+            <form method="post" action="{% url 'category-delete' category.pk %}" style="display:inline">
+              {% csrf_token %}
+              <button type="submit" class="hb-pill hb-pill--sm">{{ t.delete }}</button>
+            </form>
+          {% endif %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+
+  <p style="margin-top:20px"><a href="{% url 'dashboard' %}">{{ t.backTo }} {{ t.dashboard }}</a></p>
+</div>
+{% endblock content %}

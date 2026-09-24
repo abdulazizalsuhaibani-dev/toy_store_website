@@ -1,10 +1,14 @@
+import re
+
 from django import forms
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.contrib.auth.models import Group, User
 from django.forms import ModelForm
+from django.utils import timezone
+from django.utils.text import slugify
 from django.forms.widgets import PasswordInput, TextInput
 
-from .models import DeliveryOption, Order, Product
+from .models import Category, DeliveryOption, Order, Product
 from .roles import CUSTOMER_GROUP
 
 
@@ -128,3 +132,50 @@ class CheckoutForm(ModelForm):
         if not cleaned.get("gift_wrap"):
             cleaned["gift_note"] = ""
         return cleaned
+
+
+class CategoryForm(ModelForm):
+    """The staff-facing form behind the category screens.
+
+    `sort_order` is not on it: new categories go to the end and the list
+    screen's arrows reorder, so nobody has to type a position.
+    """
+
+    slug = forms.SlugField(max_length=70, required=False, help_text="Leave blank to use the name.")
+
+    class Meta:
+        model = Category
+        fields = ["name", "name_ar", "slug", "blurb", "blurb_ar", "glyph", "color"]
+        widgets = {"color": TextInput(attrs={"type": "color"})}
+
+    def clean_color(self):
+        color = self.cleaned_data["color"]
+        if not re.fullmatch(r"#[0-9A-Fa-f]{6}", color):
+            raise forms.ValidationError("Use a hex colour like #FFC93C.")
+        return color
+
+    def clean(self):
+        cleaned = super().clean()
+        # Derive the slug here rather than in Category.save(), so a name whose
+        # slug collides with another category is a form error, not a 500.
+        slug = cleaned.get("slug") or slugify(cleaned.get("name", ""))
+        if cleaned.get("name") and not slug:
+            self.add_error("slug", "Could not build a URL from that name; enter one.")
+        elif slug and Category.objects.filter(slug=slug).exclude(pk=self.instance.pk).exists():
+            self.add_error("slug", "Another category already uses this URL.")
+        cleaned["slug"] = slug
+        return cleaned
+
+
+class OrderStatusForm(ModelForm):
+    class Meta:
+        model = Order
+        fields = ["status"]
+
+    def save(self, commit=True):
+        order = super().save(commit=False)
+        if "status" in self.changed_data:
+            order.status_changed_at = timezone.now()
+        if commit:
+            order.save()
+        return order

@@ -37,6 +37,15 @@ urlpatterns = [
     path('dashboard/orders', views.orders, name='orders'),
     path('addProduct', views.addProduct, name='addProduct'),
 
+    # Staff screens, gated on Django permissions (see views.permission_required).
+    path('dashboard/categories', views.category_list, name='category-list'),
+    path('dashboard/categories/new', views.category_create, name='category-create'),
+    path('dashboard/categories/<int:pk>/edit', views.category_edit, name='category-edit'),
+    path('dashboard/categories/<int:pk>/delete', views.category_delete, name='category-delete'),
+    path('dashboard/categories/<int:pk>/move', views.category_move, name='category-move'),
+    path('dashboard/manage/orders', views.manage_orders, name='manage-orders'),
+    path('dashboard/manage/orders/<str:reference>/', views.manage_order, name='manage-order'),
+
     path('healthz', views.healthz, name='healthz'),
 
     # The original category URLs. Permanently redirected rather than deleted:
