@@ -30,6 +30,7 @@ urlpatterns = [
     # Accounts.
     path('login', views.login, name='login'),
     path('register', views.register, name='register'),
+    path('register/done', views.register_success, name='register-success'),
     path('logout', views.logout, name='logout'),
     path('dashboard', views.dashboard, name='dashboard'),
     path('dashboard/account-info', views.accountInfo, name='account-info'),

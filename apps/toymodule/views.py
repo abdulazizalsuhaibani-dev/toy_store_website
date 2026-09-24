@@ -10,7 +10,7 @@ new template.
 import random
 from decimal import Decimal
 
-from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout
+from django.contrib.auth import login as auth_login, logout as auth_logout
 from django.contrib.auth.decorators import login_required
 from django.db import DatabaseError, connection, transaction
 from django.db.models import Count, Q
@@ -461,21 +461,26 @@ def login(request):
     if request.method == "POST":
         form = LoginForm(request, data=request.POST)
         if form.is_valid():
-            user = authenticate(
-                request,
-                username=request.POST.get("username"),
-                password=request.POST.get("password"),
-            )
-            if user is not None:
-                # Look the cart up first: login() cycles the session key, and
-                # the anonymous cart is keyed by the old one.
-                anonymous_cart = storefront.get_cart(request, create=False)
-                auth_login(request, user)
-                storefront.adopt_cart(request, anonymous_cart)
-                return redirect("dashboard")
+            # AuthenticationForm.clean() already authenticated; reuse its result
+            # rather than hashing the password a second time.
+            user = form.get_user()
+            # Look the cart up first: login() cycles the session key, and
+            # the anonymous cart is keyed by the old one.
+            anonymous_cart = storefront.get_cart(request, create=False)
+            auth_login(request, user)
+            storefront.adopt_cart(request, anonymous_cart)
+            # @login_required builds ?next=; the form posts back to the same
+            # URL, so it arrives in the query string.
+            target = request.POST.get("next") or request.GET.get("next", "")
+            if target and url_has_allowed_host_and_scheme(
+                target, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+            ):
+                return redirect(target)
+            return redirect("dashboard")
     return render(request, "toymodule/login.html", {"loginform": form})
 
 
+@require_POST
 def logout(request):
     auth_logout(request)
     return redirect("index")
@@ -487,8 +492,12 @@ def register(request):
         form = AddUserForm(request.POST)
         if form.is_valid():
             form.save()
-            return render(request, "toymodule/registerSuccess.html")
+            return redirect("register-success")
     return render(request, "toymodule/register.html", {"registerform": form})
+
+
+def register_success(request):
+    return render(request, "toymodule/registerSuccess.html")
 
 
 @login_required(login_url="login")

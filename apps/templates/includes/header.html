@@ -59,7 +59,10 @@
 
       {% if user.is_authenticated %}
         <a class="hb-nav__link" href="{% url 'dashboard' %}">{{ t.dashboard }}</a>
-        <a class="hb-nav__link" href="{% url 'logout' %}">{{ t.signOut }}</a>
+        <form method="post" action="{% url 'logout' %}" style="display:inline">
+          {% csrf_token %}
+          <button type="submit" class="hb-nav__link" style="background:none;border:0;padding:0;font:inherit;cursor:pointer">{{ t.signOut }}</button>
+        </form>
       {% else %}
         <a class="hb-nav__link" href="{% url 'login' %}">{{ t.signIn }}</a>
       {% endif %}
