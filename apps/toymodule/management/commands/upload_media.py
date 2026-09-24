@@ -40,9 +40,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        if isinstance(default_storage._wrapped, FileSystemStorage) or isinstance(
-            default_storage, FileSystemStorage
-        ):
+        if isinstance(default_storage, FileSystemStorage):
             raise CommandError(
                 "The default storage is still the local filesystem, so this "
                 "would copy media/ onto itself. Set SUPABASE_S3_ENDPOINT and "

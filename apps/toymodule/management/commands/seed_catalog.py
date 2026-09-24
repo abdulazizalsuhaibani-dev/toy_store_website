@@ -15,7 +15,7 @@ recognise, so it is safe to run against a shop that has real rows in it.
 
 from decimal import Decimal
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from apps.toymodule.models import Category, Product
@@ -215,7 +215,7 @@ class Command(BaseCommand):
         categories = {c.name: c for c in Category.objects.all()}
         missing = {row["category"] for row in DEMO_PRODUCTS} - set(categories)
         if missing:
-            raise SystemExit(
+            raise CommandError(
                 "Missing categories: "
                 + ", ".join(sorted(missing))
                 + ". Run `python manage.py migrate` first."
