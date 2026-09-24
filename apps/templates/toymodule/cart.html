@@ -8,10 +8,10 @@
 
   <div class="hb-row" style="gap:16px;margin-bottom:6px">
     <h1 style="font-size:clamp(34px,5vw,54px);letter-spacing:-1px">{{ t.cartTitle }}</h1>
-    <span class="hb-badge hb-badge--flat" style="background:var(--blue);font-size:17px;padding:6px 16px">{{ count }} {% if count == 1 %}{{ t.item }}{% else %}{{ t.items }}{% endif %}</span>
+    <span class="hb-badge hb-badge--flat" style="background:var(--blue);font-size:17px;padding:6px 16px">{% count count "item" %}</span>
   </div>
 
-  <nav class="hb-steps" style="margin-bottom:26px" aria-label="Checkout progress">
+  <nav class="hb-steps" style="margin-bottom:26px" aria-label="{{ t.checkoutSteps }}">
     <span style="color:var(--ink)">{{ t.step1 }}</span><span>{{ t.chev }}</span>
     <span>{{ t.step2 }}</span><span>{{ t.chev }}</span>
     <span>{{ t.step3 }}</span>
@@ -33,7 +33,7 @@
               </div>
               {% if item.over_stock or item.product.low_stock or not item.product.in_stock %}
                 <div class="hb-small" style="margin-top:4px;color:var(--red-link)">
-                  {% if not item.product.in_stock %}{{ t.outOfStock }}{% else %}{{ t.only }} {{ item.product.quantity }} {{ t.left }}{% endif %}
+                  {% if not item.product.in_stock %}{{ t.outOfStock }}{% else %}{% copy "onlyLeft" n=item.product.quantity %}{% endif %}
                 </div>
               {% endif %}
               <form method="post" action="{% url 'cart-update' item.pk %}" style="margin-top:8px">

@@ -9,9 +9,11 @@ repeating the same six lines.
 """
 
 from django import template
+from django.utils import timezone
 
 from .. import storefront
 from ..models import Currency
+from ..strings import plural
 
 register = template.Library()
 
@@ -51,6 +53,40 @@ def label(context, obj):
 def status_label(context, order):
     """An order's status in the current language."""
     return context["t"].get(f"status_{order.status}", order.get_status_display())
+
+
+@register.simple_tag(takes_context=True)
+def payment_label(context, order):
+    """How an order is being paid for, in the current language."""
+    return order.payment_label(context.get("lang", "en"))
+
+
+@register.simple_tag(takes_context=True)
+def count(context, n, noun):
+    """A number and its noun: `{% count cart_count "item" %}` -> "3 items"."""
+    return plural(noun, n or 0, context.get("lang", "en"))
+
+
+@register.simple_tag(takes_context=True)
+def copy(context, key, **values):
+    """A string with placeholders: `{% copy "onlyLeft" n=product.quantity %}`."""
+    return context["t"][key].format(**values)
+
+
+@register.simple_tag(takes_context=True)
+def when(context, moment, time=False):
+    """A date as "24 Sep 2026" (or "24 سبتمبر 2026"), optionally with the time.
+
+    The `date` filter would print English month names on an Arabic page:
+    Django's own translations are not switched on, because the language here
+    comes from the header toggle, not from Django's i18n machinery.
+    """
+    if moment is None:
+        return ""
+    moment = timezone.localtime(moment)
+    month = context["t"]["months"].split()[moment.month - 1]
+    text = f"{moment.day} {month} {moment.year}"
+    return f"{text} {moment:%H:%M}" if time else text
 
 
 @register.simple_tag(takes_context=True)

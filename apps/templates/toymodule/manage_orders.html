@@ -23,7 +23,7 @@
             <a class="hb-line__name hb-keep-ltr" href="{% url 'manage-order' order.reference %}">{{ order.reference }}</a>
             <span class="hb-pill hb-pill--sm" style="margin-inline-start:8px">{% status_label order %}</span>
             <div class="hb-small hb-muted" style="margin-top:4px">
-              {{ order.created_at|date:"j M Y H:i" }} · {{ order.full_name }}{% if order.user %} ({{ order.user.username }}){% endif %}
+              {% when order.created_at time=True %} · {{ order.full_name }}{% if order.user %} ({{ order.user.username }}){% endif %}
             </div>
           </div>
           <span class="hb-line__total">{% money_in order.currency_code order.total %}</span>

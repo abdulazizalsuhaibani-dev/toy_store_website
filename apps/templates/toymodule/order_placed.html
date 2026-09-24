@@ -28,7 +28,7 @@
         <span class="hb-keep-ltr">{{ order.phone }}</span>
       </address>
       <p class="hb-small hb-muted" style="margin-top:16px">
-        {% delivery_label order.delivery_option %} · {{ order.get_payment_method_display }}
+        {% delivery_label order.delivery_option %} · {% payment_label order %}
         {% if order.gift_wrap %} · {{ t.giftWrap }}{% endif %}
       </p>
       {% if order.gift_note %}

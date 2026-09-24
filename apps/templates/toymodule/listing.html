@@ -8,7 +8,7 @@
 <section class="hb-pagehead" style="background:{% if category %}{{ category.color }}{% else %}var(--yellow){% endif %}">
   <span style="position:absolute;top:-40px;inset-inline-end:8%;width:160px;height:160px;border-radius:999px;background:rgba(255,255,255,.3)"></span>
   <div class="hb-shell hb-pagehead__inner">
-    <nav class="hb-crumbs" aria-label="Breadcrumb">
+    <nav class="hb-crumbs" aria-label="{{ t.breadcrumb }}">
       <a href="{% url 'index' %}">{{ t.navHome }}</a> /
       <a href="{% url 'shop' %}">{{ t.crumbShop }}</a>
       {% if category %} / <span>{% label category %}</span>{% endif %}

@@ -11,7 +11,6 @@
   <div class="hb-panel">
     <form method="post" novalidate>
       {% csrf_token %}
-      {% if loginform.errors %}<div class="hb-errors">{{ t.badLogin }}</div>{% endif %}
       {{ loginform|crispy }}
       <button type="submit" class="hb-btn hb-btn--primary hb-btn--block">{{ t.signIn }}</button>
     </form>

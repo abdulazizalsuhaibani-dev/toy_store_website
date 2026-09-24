@@ -16,7 +16,7 @@
             <a class="hb-line__name hb-keep-ltr" href="{% url 'order-placed' order.reference %}">{{ order.reference }}</a>
             <span class="hb-pill hb-pill--sm" style="margin-inline-start:8px">{% status_label order %}</span>
             <div class="hb-small hb-muted" style="margin-top:4px">
-              {{ order.created_at|date:"j M Y" }} · {% delivery_label order.delivery_option %} · {{ order.get_payment_method_display }}
+              {% when order.created_at %} · {% delivery_label order.delivery_option %} · {% payment_label order %}
             </div>
             <ul style="margin:10px 0 0;padding:0;list-style:none;font-size:15px;font-weight:700">
               {% for item in order.items.all %}

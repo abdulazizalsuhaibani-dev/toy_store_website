@@ -1,0 +1,29 @@
+{% load static %}<!DOCTYPE html>
+{% comment %}
+  Django renders this with no context at all (no request, no session, so no
+  language), and it must not touch the database that may be what broke. So it
+  stands alone and says everything in both languages.
+{% endcomment %}
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Happybox</title>
+    <link rel="stylesheet" href="{% static 'css/happybox.css' %}">
+  </head>
+  <body>
+    <main class="hb-main">
+      <div class="hb-shell" style="padding-top:64px;max-width:560px">
+        <div class="hb-panel hb-panel--tall" style="text-align:center">
+          <h1 style="font-size:34px;margin:0 0 8px">Something broke on our side</h1>
+          <p class="hb-muted" style="font-size:17px;margin:0 0 20px">Not your fault. Give it a minute and try again.</p>
+          <div lang="ar" dir="rtl">
+            <h1 style="font-size:34px;margin:0 0 8px">حدث خطأ من جهتنا</h1>
+            <p class="hb-muted" style="font-size:17px;margin:0 0 24px">ليس خطأك. انتظر دقيقة ثم حاول مرة أخرى.</p>
+          </div>
+          <a class="hb-btn hb-btn--primary" href="/">Happybox · هابي بوكس</a>
+        </div>
+      </div>
+    </main>
+  </body>
+</html>
