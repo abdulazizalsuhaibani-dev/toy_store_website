@@ -1,7 +1,8 @@
 """The project's test runner.
 
-Two things the default `DiscoverRunner` gets wrong here, both consequences of
-decisions made elsewhere in the project and neither worth reversing:
+Three things the default `DiscoverRunner` gets wrong here, all of them
+consequences of decisions made elsewhere in the project and none worth
+reversing:
 
 1. `apps` is a namespace package (no `__init__.py`), which is deliberate. From
    Python 3.11 unittest's discovery no longer walks into one, so a bare
@@ -9,7 +10,13 @@ decisions made elsewhere in the project and neither worth reversing:
    failure mode for a CI step, because it passes. `build_suite` names the
    local apps explicitly instead of discovering them.
 
-2. `STORAGES["staticfiles"]` is WhiteNoise's manifest storage, which refuses
+2. `SECURE_SSL_REDIRECT` is on whenever `DEBUG` is off, and both CI and a bare
+   local `manage.py test` run with it off. SecurityMiddleware then answers
+   every test-client request with a 301 to https before it ever reaches a
+   view, so the suite fails wholesale on a setting that has nothing to do with
+   the code under test. Tests opt out; `check --deploy` still proves it is on.
+
+3. `STORAGES["staticfiles"]` is WhiteNoise's manifest storage, which refuses
    to resolve `{% static %}` for any file missing from the manifest. Tests run
    with `DEBUG=False` and CI runs them *before* `collectstatic`, so every page
    render would fail on a manifest that does not exist yet. Tests get plain
@@ -39,14 +46,15 @@ class ProjectTestRunner(DiscoverRunner):
         # override_settings rather than assigning to settings.STORAGES: the
         # staticfiles storage is a lazy object that only rebuilds itself when
         # the setting_changed signal fires.
-        self._storage_override = override_settings(
+        self._overrides = override_settings(
+            SECURE_SSL_REDIRECT=False,
             STORAGES={
                 **settings.STORAGES,
                 "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
-            }
+            },
         )
-        self._storage_override.enable()
+        self._overrides.enable()
 
     def teardown_test_environment(self, **kwargs):
-        self._storage_override.disable()
+        self._overrides.disable()
         super().teardown_test_environment(**kwargs)
