@@ -7,7 +7,9 @@ access rule on the order confirmation page.
 """
 
 import re
+from datetime import datetime, timezone as dt_timezone
 from decimal import Decimal
+from pathlib import Path
 
 from django.contrib.auth.models import Group, User
 from django.core.management import call_command
@@ -16,9 +18,11 @@ from django.test import TestCase, TransactionTestCase
 from django.template.loader import render_to_string
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
+from django.utils.html import escape
 
 from .models import Category, Currency, DeliveryOption, Order, Product
 from .storefront import format_money
+from .strings import STRINGS, plural, translations
 
 
 class CurrencyTests(TestCase):
@@ -1015,7 +1019,7 @@ class HeaderTests(TestCase):
 
     def test_main_nav_is_home_and_shop_only(self):
         header = self.header(self.client.get(reverse("index")))
-        nav = header[header.index('aria-label="Main"'):]
+        nav = header[header.index(f'aria-label="{translations("en")["navMain"]}"'):]
         nav = nav[:nav.index("</nav>")]
         self.assertIn(f'href="{reverse("index")}"', nav)
         self.assertIn(f'href="{reverse("shop")}"', nav)
@@ -1025,7 +1029,7 @@ class HeaderTests(TestCase):
     def test_regions_sit_inside_a_collapsible_menu(self):
         header = self.header(self.client.get(reverse("index")))
         menu = header[header.index('<details class="hb-menu">'):header.index("</details>")]
-        for region in ('aria-label="Main"', 'class="hb-utility"', 'class="hb-account"'):
+        for region in (f'aria-label="{translations("en")["navMain"]}"', 'class="hb-utility"', 'class="hb-account"'):
             with self.subTest(region=region):
                 self.assertTrue(region in menu, region)
         for control in (reverse("set-language"), reverse("set-currency"), reverse("search")):
@@ -1064,3 +1068,271 @@ class HeaderTests(TestCase):
         header = header.replace(render_to_string("includes/logo.html"), "")
         header = re.sub(r'style="background:#[0-9A-Fa-f]{6}"', "", header)
         self.assertEqual(re.findall(r'style="[^"]*"', header), [])
+
+
+# Django's own English, which must never reach a shopper browsing in Arabic.
+DJANGO_ENGLISH = (
+    "This field is required",
+    "Please enter a correct username",
+    "Enter a valid",
+    "Your password",
+    "The two password fields",
+    "Required. 150 characters",
+    "Password confirmation",
+    "A user with that username",
+)
+
+
+class PluralTests(TestCase):
+    def test_english_has_one_and_other(self):
+        self.assertEqual(plural("toy", 1, "en"), "1 toy")
+        self.assertEqual(plural("toy", 0, "en"), "0 toys")
+        self.assertEqual(plural("toy", 4, "en"), "4 toys")
+
+    def test_arabic_follows_the_number(self):
+        cases = {
+            0: "0 لعبة",
+            1: "لعبة واحدة",
+            2: "لعبتان",
+            3: "3 ألعاب",
+            10: "10 ألعاب",
+            11: "11 لعبة",
+            99: "99 لعبة",
+            100: "100 لعبة",
+            103: "103 ألعاب",
+        }
+        for n, text in cases.items():
+            with self.subTest(n=n):
+                self.assertEqual(plural("toy", n, "ar"), text)
+
+    def test_arabic_accusative_after_eleven(self):
+        self.assertEqual(plural("order", 15, "ar"), "15 طلبًا")
+        self.assertEqual(plural("order", 200, "ar"), "200 طلب")
+
+
+class StringTableTests(TestCase):
+    def test_every_string_is_used(self):
+        root = Path(__file__).resolve().parent
+        sources = [p.read_text(encoding="utf-8") for p in root.parent.joinpath("templates").rglob("*.html")]
+        sources += [p.read_text(encoding="utf-8") for p in root.rglob("*.py") if p.name not in ("strings.py", "tests.py")]
+        text = "\n".join(sources)
+        # Keys looked up by prefix: status_<value>, err_<code> and the months.
+        dynamic = ("status_", "err_", "month")
+        unused = [
+            key for key in STRINGS
+            if not key.startswith(dynamic)
+            and not re.search(rf"t\.{key}\b|[\"']{key}[\"']", text)
+        ]
+        self.assertEqual(unused, [])
+
+    def test_every_pair_has_both_languages(self):
+        for key, pair in STRINGS.items():
+            with self.subTest(key=key):
+                self.assertEqual(len(pair), 2)
+                self.assertTrue(pair[0] and pair[1])
+
+
+class CopyTestCase(TestCase):
+    def arabic(self):
+        self.client.post(reverse("set-language"), {"lang": "ar"})
+        return translations("ar")
+
+    def assertNoDjangoEnglish(self, response):
+        body = response.content.decode()
+        for phrase in DJANGO_ENGLISH:
+            with self.subTest(phrase=phrase):
+                self.assertNotIn(phrase, body)
+
+
+class AuthCopyTests(CopyTestCase):
+    def test_a_bad_login_says_so_once(self):
+        response = self.client.post(reverse("login"), {"username": "nobody", "password": "x"})
+        self.assertContains(response, escape(translations("en")["err_invalid_login"]), count=1)
+        self.assertNoDjangoEnglish(response)
+
+    def test_a_bad_login_in_arabic(self):
+        t = self.arabic()
+        response = self.client.post(reverse("login"), {"username": "nobody", "password": "x"})
+        self.assertContains(response, t["err_invalid_login"], count=1)
+        self.assertContains(response, t["username"])
+        self.assertContains(response, t["password"])
+        self.assertNoDjangoEnglish(response)
+
+    def test_a_bad_signup_in_arabic(self):
+        t = self.arabic()
+        User.objects.create_user("taken", password="not-a-real-password-123")
+        response = self.client.post(
+            reverse("register"),
+            {"username": "taken", "email": "nope", "password1": "123", "password2": "456"},
+        )
+        for key in ("err_username_unique", "err_email_invalid", "err_password_mismatch"):
+            with self.subTest(key=key):
+                self.assertContains(response, t[key])
+        self.assertNoDjangoEnglish(response)
+
+    def test_weak_passwords_are_explained_in_arabic(self):
+        t = self.arabic()
+        response = self.client.post(
+            reverse("register"), {"username": "newparent", "password1": "12345", "password2": "12345"}
+        )
+        self.assertContains(response, t["err_password_too_short"].format(min_length=8))
+        self.assertContains(response, t["err_password_entirely_numeric"])
+        self.assertNoDjangoEnglish(response)
+
+    def test_signup_page_has_its_own_subtitle(self):
+        t = translations("en")
+        response = self.client.get(reverse("register"))
+        self.assertContains(response, t["joinUsBody"])
+        self.assertNotContains(response, t["catsSub"])
+
+    def test_login_fields_tell_password_managers_what_they_are(self):
+        page = self.client.get(reverse("login")).content.decode()
+        self.assertRegex(page, r'<input[^>]*name="username"[^>]*autocomplete="username"')
+        self.assertRegex(page, r'<input[^>]*name="password"[^>]*autocomplete="current-password"')
+
+    def test_signup_still_works(self):
+        response = self.client.post(
+            reverse("register"),
+            {"username": "newparent", "email": "p@example.com",
+             "password1": "a-long-enough-pass-42", "password2": "a-long-enough-pass-42"},
+        )
+        self.assertRedirects(response, reverse("register-success"))
+
+
+class CheckoutCopyTests(CopyTestCase):
+    def setUp(self):
+        toy = Product.objects.create(
+            pname="Stacky", pname_ar="ستاكي", pprice=Decimal("40"), quantity=3,
+            category=Category.objects.get(name="Baby Toys"),
+        )
+        self.client.post(reverse("cart-add", args=[toy.pk]), {"quantity": 1})
+
+    def test_missing_fields_are_explained_in_arabic(self):
+        t = self.arabic()
+        response = self.client.post(reverse("checkout"), {})
+        self.assertContains(response, t["err_required"])
+        self.assertNoDjangoEnglish(response)
+
+    def test_missing_fields_in_english_use_the_shop_voice(self):
+        response = self.client.post(reverse("checkout"), {})
+        self.assertContains(response, escape(translations("en")["err_required"]))
+        self.assertNoDjangoEnglish(response)
+
+    def test_address_fields_have_placeholders(self):
+        t = translations("en")
+        response = self.client.get(reverse("checkout"))
+        for key in ("fullNamePh", "streetPh", "cityPh"):
+            with self.subTest(key=key):
+                self.assertContains(response, f'placeholder="{t[key]}"')
+
+    def test_cart_count_reads_naturally_in_arabic(self):
+        self.arabic()
+        self.assertContains(self.client.get(reverse("cart")), "قطعة واحدة")
+
+    def test_low_stock_is_one_sentence(self):
+        self.arabic()
+        self.assertContains(self.client.get(reverse("cart")), "بقي 3 فقط")
+
+
+class ChromeCopyTests(CopyTestCase):
+    def test_accessible_labels_are_translated(self):
+        t = self.arabic()
+        page = self.client.get(reverse("index")).content.decode()
+        self.assertIn(f'aria-label="{t["navMain"]}"', page)
+        self.assertIn(t["skipToContent"], page)
+        self.assertNotIn("Skip to content", page)
+        self.assertNotIn('aria-label="Main"', page)
+
+    def test_search_suggestions_are_arabic_words(self):
+        self.arabic()
+        page = self.client.get(reverse("search"))
+        self.assertContains(page, "دبدوب</a>")
+        self.assertNotContains(page, ">bear<")
+
+    def test_breadcrumb_label_is_translated(self):
+        t = self.arabic()
+        page = self.client.get(reverse("category", args=["baby-toys"]))
+        self.assertContains(page, f'aria-label="{t["breadcrumb"]}"')
+
+    def test_missing_page_is_branded_and_translated(self):
+        t = self.arabic()
+        response = self.client.get("/toy/no-such-toy/")
+        self.assertEqual(response.status_code, 404)
+        self.assertContains(response, t["notFoundTitle"], status_code=404)
+        self.assertContains(response, 'dir="rtl"', status_code=404)
+
+    def test_empty_shelf_does_not_ask_shoppers_to_add_toys(self):
+        self.assertNotIn("add the first", translations("en")["emptyShelfBody"])
+
+
+class AccountCopyTests(CopyTestCase, StaffTestCase):
+    def make_order(self, **extra):
+        fields = dict(
+            reference="HB-COPY01", full_name="Sam Rivera", phone="050", street="18 Marbles Lane", city="Riyadh",
+            subtotal=Decimal("75"), total=Decimal("75"), user=self.customer,
+            payment_method=Order.Payment.ON_DELIVERY,
+        )
+        fields.update(extra)
+        return Order.objects.create(**fields)
+
+    def test_dashboard_counts_orders_not_items(self):
+        self.make_order()
+        self.client.force_login(self.customer)
+        page = self.client.get(reverse("dashboard"))
+        self.assertContains(page, "1 order")
+        self.assertNotContains(page, "1 item")
+
+    def test_order_history_is_arabic_throughout(self):
+        order = self.make_order()
+        Order.objects.filter(pk=order.pk).update(created_at=datetime(2026, 9, 24, 10, 0, tzinfo=dt_timezone.utc))
+        self.client.force_login(self.customer)
+        self.arabic()
+        page = self.client.get(reverse("orders"))
+        self.assertContains(page, "الدفع عند الاستلام")
+        self.assertContains(page, "24 سبتمبر 2026")
+        self.assertNotContains(page, "Pay on delivery")
+        self.assertNotContains(page, "Sep")
+
+    def test_category_count_is_pluralised(self):
+        cat = Category.objects.get(name="Others")
+        Product.objects.filter(category=cat).delete()
+        Product.objects.create(pname="Lonely", pprice=Decimal("5"), category=cat)
+        self.client.force_login(self.admin)
+        page = self.client.get(reverse("category-list"))
+        self.assertContains(page, "1 toy<")
+        self.assertNotContains(page, "1 toys")
+
+
+class StaffCopyTests(CopyTestCase, StaffTestCase):
+    def test_add_toy_form_is_arabic(self):
+        t = self.arabic()
+        self.client.force_login(self.admin)
+        response = self.client.post(reverse("addProduct"), {"pname": "", "age_min": 9, "age_max": 3})
+        self.assertContains(response, t["fieldName"])
+        self.assertContains(response, t["err_required"])
+        self.assertContains(response, t["err_age_order"])
+        self.assertNoDjangoEnglish(response)
+        for english in ("Youngest age", "Is featured", "Stock quantity", "Solo"):
+            with self.subTest(english=english):
+                self.assertNotContains(response, english)
+
+    def test_category_form_is_arabic(self):
+        t = self.arabic()
+        self.client.force_login(self.admin)
+        response = self.client.post(reverse("category-create"), {"name": "!!!", "color": "red"})
+        self.assertContains(response, t["err_slug_empty"])
+        self.assertContains(response, t["err_color"])
+        for english in ("Name ar", "Blurb ar", "Glyph"):
+            with self.subTest(english=english):
+                self.assertNotContains(response, english)
+
+    def test_status_picker_is_arabic(self):
+        order = Order.objects.create(
+            reference="HB-COPY02", full_name="Sam", phone="050", street="x", city="y",
+            subtotal=Decimal("1"), total=Decimal("1"),
+        )
+        self.arabic()
+        self.client.force_login(self.admin)
+        page = self.client.get(reverse("manage-order", args=[order.reference]))
+        self.assertContains(page, "قيد الانتظار</option>")
+        self.assertNotContains(page, ">Pending</option>")

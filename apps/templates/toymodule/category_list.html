@@ -1,4 +1,5 @@
 {% extends "layouts/base.html" %}
+{% load happybox %}
 
 {% block title %}{{ t.manageCategories }}{% endblock %}
 
@@ -16,7 +17,7 @@
         <span aria-hidden="true" style="width:52px;height:52px;border:var(--line);border-radius:16px;display:grid;place-items:center;font-size:26px;background:{{ category.color }}">{{ category.glyph }}</span>
         <div style="flex:1;min-width:180px">
           <div class="hb-line__name">{{ category.name }}{% if category.name_ar %} · {{ category.name_ar }}{% endif %}</div>
-          <div class="hb-small hb-muted">/c/{{ category.slug }}/ · {{ category.product_count }} {{ t.toysCount }}</div>
+          <div class="hb-small hb-muted">/c/{{ category.slug }}/ · {% count category.product_count "toy" %}</div>
         </div>
         <div class="hb-row" style="gap:8px;flex-wrap:wrap">
           {% if perms.toymodule.change_category %}

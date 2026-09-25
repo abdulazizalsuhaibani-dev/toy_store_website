@@ -331,7 +331,8 @@ def search(request):
             "page_obj": page,
             "categories": categories,
             "cat": cat_slug,
-            "suggestions": ["blocks", "kite", "bear", "marble", "robot"],
+            # Words that match the seeded toys by name in each language.
+            "suggestions": _t(request)["searchSuggestions"].split(),
             **state,
         },
     )
@@ -466,7 +467,7 @@ def checkout(request):
     options = list(DeliveryOption.objects.all())
 
     if request.method == "POST":
-        form = CheckoutForm(request.POST)
+        form = CheckoutForm(request.POST, lang=_lang(request))
         if form.is_valid():
             order = form.save(commit=False)
             chosen = order.delivery_option
@@ -523,7 +524,7 @@ def checkout(request):
             initial["delivery_option"] = options[0].pk
         if request.user.is_authenticated:
             initial.setdefault("full_name", request.user.get_full_name() or request.user.username)
-        form = CheckoutForm(initial=initial)
+        form = CheckoutForm(initial=initial, lang=_lang(request))
 
     selected = None
     if form.is_bound and form.data.get("delivery_option"):
@@ -582,9 +583,9 @@ def order_placed(request, reference):
 
 
 def login(request):
-    form = LoginForm()
+    form = LoginForm(lang=_lang(request))
     if request.method == "POST":
-        form = LoginForm(request, data=request.POST)
+        form = LoginForm(request, data=request.POST, lang=_lang(request))
         if form.is_valid():
             # AuthenticationForm.clean() already authenticated; reuse its result
             # rather than hashing the password a second time.
@@ -612,9 +613,9 @@ def logout(request):
 
 
 def register(request):
-    form = AddUserForm()
+    form = AddUserForm(lang=_lang(request))
     if request.method == "POST":
-        form = AddUserForm(request.POST)
+        form = AddUserForm(request.POST, lang=_lang(request))
         if form.is_valid():
             form.save()
             return redirect("register-success")
@@ -628,12 +629,12 @@ def register_success(request):
 @permission_required("toymodule.add_product")
 def addProduct(request):
     if request.method == "POST":
-        form = AddProductForm(request.POST, request.FILES)
+        form = AddProductForm(request.POST, request.FILES, lang=_lang(request))
         if form.is_valid():
             form.save()
             return redirect("dashboard")
     else:
-        form = AddProductForm()
+        form = AddProductForm(lang=_lang(request))
     return render(request, "toymodule/addProduct.html", {"form": form})
 
 
@@ -667,8 +668,12 @@ def orders(request):
 # ------------------------------------------------------ staff: categories --
 
 
+def _lang(request):
+    return storefront.get_language(request)
+
+
 def _t(request):
-    return translations(storefront.get_language(request))
+    return translations(_lang(request))
 
 
 @permission_required("toymodule.view_category")
@@ -681,7 +686,7 @@ def category_list(request):
 
 
 def _category_form(request, category):
-    form = CategoryForm(request.POST or None, instance=category)
+    form = CategoryForm(request.POST or None, instance=category, lang=_lang(request))
     if request.method == "POST" and form.is_valid():
         saved = form.save(commit=False)
         saved.slug = form.cleaned_data["slug"]
@@ -758,11 +763,11 @@ def manage_orders(request):
 @permission_required("toymodule.view_order")
 def manage_order(request, reference):
     order = get_object_or_404(Order.objects.select_related("user", "delivery_option").prefetch_related("items"), reference=reference)
-    form = OrderStatusForm(instance=order)
+    form = OrderStatusForm(instance=order, lang=_lang(request))
     if request.method == "POST":
         if not request.user.has_perm("toymodule.change_order"):
             raise PermissionDenied
-        form = OrderStatusForm(request.POST, instance=order)
+        form = OrderStatusForm(request.POST, instance=order, lang=_lang(request))
         if form.is_valid():
             form.save()
             messages.success(request, _t(request)["statusSaved"])

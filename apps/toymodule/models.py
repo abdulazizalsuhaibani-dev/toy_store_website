@@ -388,6 +388,11 @@ class Order(models.Model):
     def __str__(self):
         return self.reference
 
+    def payment_label(self, lang):
+        if lang == "ar":
+            return self.PAYMENT_AR.get(self.payment_method, self.get_payment_method_display())
+        return self.get_payment_method_display()
+
 
 class OrderItem(models.Model):
     """A line on an order.

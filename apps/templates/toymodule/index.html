@@ -53,7 +53,7 @@
         <span class="hb-cat__glyph" aria-hidden="true">{{ cat.glyph }}</span>
         <span>
           <span class="hb-cat__name" style="display:block">{% label cat %}</span>
-          <span class="hb-cat__meta">{% if cat.product_count == 1 %}{{ t.oneToy }}{% else %}{{ cat.product_count }} {{ t.toys }}{% endif %}</span>
+          <span class="hb-cat__meta">{% count cat.product_count "toy" %}</span>
         </span>
       </a>
     {% endfor %}

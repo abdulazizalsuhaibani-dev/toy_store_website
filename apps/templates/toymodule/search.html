@@ -87,7 +87,7 @@
   <div>
     <div class="hb-row" style="gap:14px;margin-bottom:18px">
       <h2 style="font-size:26px">
-        {% if page_obj.paginator.count == 1 %}{{ t.oneToy }}{% else %}{{ page_obj.paginator.count }} {{ t.toys }}{% endif %}
+        {% count page_obj.paginator.count "toy" %}
       </h2>
       <div class="hb-row" style="margin-inline-start:auto;gap:8px">
         {% for option in sort_options %}

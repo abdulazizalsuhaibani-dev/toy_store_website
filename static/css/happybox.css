@@ -814,6 +814,13 @@ input[type="color"] { padding: 4px; height: 48px; cursor: pointer; }
   color: var(--ink);
 }
 .errorlist li { list-style: none; }
+/* Checkout wraps each field's errorlist in its own .hb-errors box; one box, not two. */
+.hb-errors .errorlist { background: none; border: 0; border-radius: 0; padding: 0; margin: 0; }
+/* crispy's non-field alert holds a bare <ul>; no bullet, no indent. */
+.alert-danger ul { list-style: none; padding: 0; margin: 0; }
+/* crispy puts each field error in a <p>; its default margins doubled the box. */
+.invalid-feedback p { margin: 0; }
+.invalid-feedback p + p { margin-top: 6px; }
 .is-invalid, .form-control.is-invalid { border-color: var(--red); }
 
 /* ------------------------------------------------------------ footer -- */

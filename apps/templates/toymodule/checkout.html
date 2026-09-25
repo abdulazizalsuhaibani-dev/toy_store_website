@@ -8,7 +8,7 @@
 
   <h1 style="font-size:clamp(32px,4.5vw,50px);margin-bottom:14px;letter-spacing:-1px">{{ t.coTitle }}</h1>
 
-  <nav class="hb-steps" style="margin-bottom:28px" aria-label="Checkout progress">
+  <nav class="hb-steps" style="margin-bottom:28px" aria-label="{{ t.checkoutSteps }}">
     <a href="{% url 'cart' %}" style="color:var(--muted)">{{ t.step1done }}</a>
     <span style="color:#C6BFD0">{{ t.chev }}</span>
     <span class="hb-steps__now">{{ t.step2 }}</span>
@@ -126,7 +126,7 @@
       </div>
 
       <aside class="hb-panel hb-panel--yellow hb-summary">
-        <h2 style="font-size:26px;margin-bottom:16px">{{ count }} {% if count == 1 %}{{ t.inBoxSuffixOne }}{% else %}{{ t.inBoxSuffix }}{% endif %}</h2>
+        <h2 style="font-size:26px;margin-bottom:16px">{% count count "toy" %} {{ t.inTheBox }}</h2>
         <div style="display:grid;gap:10px;padding-bottom:16px;border-bottom:var(--line)">
           {% for item in items %}
             <div style="display:flex;gap:11px;align-items:center;font-size:15px;font-weight:700">

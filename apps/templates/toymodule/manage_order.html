@@ -7,8 +7,8 @@
 <div class="hb-shell hb-shell--narrow" style="padding-top:44px">
   <h1 class="hb-keep-ltr" style="font-size:clamp(28px,4vw,44px);margin-bottom:8px">{{ order.reference }}</h1>
   <p class="hb-muted" style="margin:0 0 24px">
-    {{ order.created_at|date:"j M Y H:i" }} · <span class="hb-pill hb-pill--sm">{% status_label order %}</span>
-    {% if order.status_changed_at %} · {{ t.statusChangedAt }} {{ order.status_changed_at|date:"j M Y H:i" }}{% endif %}
+    {% when order.created_at time=True %} · <span class="hb-pill hb-pill--sm">{% status_label order %}</span>
+    {% if order.status_changed_at %} · {{ t.statusChangedAt }} {% when order.status_changed_at time=True %}{% endif %}
   </p>
 
   <div class="hb-grid hb-grid--split">
@@ -21,7 +21,7 @@
         <span class="hb-keep-ltr">{{ order.phone }}</span>
       </address>
       <p class="hb-small hb-muted" style="margin-top:16px">
-        {% delivery_label order.delivery_option %} · {{ order.get_payment_method_display }}
+        {% delivery_label order.delivery_option %} · {% payment_label order %}
         {% if order.gift_wrap %} · {{ t.giftWrap }}{% endif %}
       </p>
       {% if order.gift_note %}<blockquote style="margin:16px 0 0">{{ order.gift_note }}</blockquote>{% endif %}

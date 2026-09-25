@@ -1,4 +1,5 @@
 {% extends "layouts/base.html" %}
+{% load happybox %}
 
 {% block title %}{{ t.dashboard }}{% endblock %}
 
@@ -39,7 +40,7 @@
       <span class="hb-cat__glyph" aria-hidden="true">📦</span>
       <span>
         <span class="hb-cat__name" style="display:block">{{ t.yourOrders }}</span>
-        <span class="hb-cat__meta">{{ order_count }} {% if order_count == 1 %}{{ t.item }}{% else %}{{ t.items }}{% endif %}</span>
+        <span class="hb-cat__meta">{% count order_count "order" %}</span>
       </span>
     </a>
     <a class="hb-cat" href="{% url 'account-info' %}" style="background:var(--pink)">
