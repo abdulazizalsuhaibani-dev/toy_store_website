@@ -6,7 +6,7 @@ from django.contrib.auth.models import Group, User
 from django.forms import ModelForm
 from django.utils import timezone
 from django.utils.text import slugify
-from django.forms.widgets import PasswordInput, TextInput
+from django.forms.widgets import TextInput
 
 from .models import Category, Currency, DeliveryOption, Order, Product
 from .roles import CUSTOMER_GROUP
@@ -185,8 +185,8 @@ class AddUserForm(StorefrontForm, UserCreationForm):
 
 
 class LoginForm(StorefrontForm, AuthenticationForm):
-    username = forms.CharField(widget=TextInput())
-    password = forms.CharField(widget=PasswordInput())
+    # AuthenticationForm's own fields, not redeclared: they carry the
+    # autocomplete hints ("username", "current-password") password managers read.
     copy_labels = {"username": "username", "password": "password"}
 
 

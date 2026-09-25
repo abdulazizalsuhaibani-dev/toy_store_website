@@ -1185,6 +1185,11 @@ class AuthCopyTests(CopyTestCase):
         self.assertContains(response, t["joinUsBody"])
         self.assertNotContains(response, t["catsSub"])
 
+    def test_login_fields_tell_password_managers_what_they_are(self):
+        page = self.client.get(reverse("login")).content.decode()
+        self.assertRegex(page, r'<input[^>]*name="username"[^>]*autocomplete="username"')
+        self.assertRegex(page, r'<input[^>]*name="password"[^>]*autocomplete="current-password"')
+
     def test_signup_still_works(self):
         response = self.client.post(
             reverse("register"),
